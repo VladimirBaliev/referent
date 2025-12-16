@@ -1,0 +1,10 @@
+# Игнорируемые файлы при деплое на Vercel
+node_modules
+.next
+.git
+.env*.local
+*.log
+.DS_Store
+coverage
+.vercel
+
