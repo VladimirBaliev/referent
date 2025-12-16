@@ -10,8 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "postbuild": "next lint"
+    "lint": "next lint"
   },
   "dependencies": {
     "react": "^18.3.1",
