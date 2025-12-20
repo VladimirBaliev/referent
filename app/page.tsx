@@ -10,6 +10,43 @@ export default function Home() {
   const [result, setResult] = useState('')
   const [activeAction, setActiveAction] = useState<ActionType>(null)
 
+  const handleParse = async () => {
+    if (!url.trim()) {
+      alert('Пожалуйста, введите URL статьи')
+      return
+    }
+
+    setLoading(true)
+    setActiveAction(null)
+    setResult('')
+
+    try {
+      const response = await fetch('/api/parse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: url.trim() }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Ошибка при парсинге статьи')
+      }
+
+      const data = await response.json()
+      
+      // Форматируем JSON для красивого отображения
+      setResult(JSON.stringify(data, null, 2))
+    } catch (error) {
+      setResult(JSON.stringify({
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+      }, null, 2))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleAction = async (action: ActionType) => {
     if (!url.trim()) {
       alert('Пожалуйста, введите URL статьи')
@@ -57,6 +94,17 @@ export default function Home() {
               placeholder="https://example.com/article"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
             />
+          </div>
+
+          {/* Кнопка парсинга */}
+          <div className="mb-6">
+            <button
+              onClick={handleParse}
+              disabled={loading}
+              className="w-full px-6 py-3 bg-indigo-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Парсить статью
+            </button>
           </div>
 
           {/* Кнопки действий */}
@@ -110,14 +158,14 @@ export default function Home() {
                   </span>
                 </div>
               ) : result ? (
-                <div className="prose dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 font-sans">
+                <div className="max-w-none">
+                  <pre className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 font-mono text-sm bg-gray-100 dark:bg-gray-800 p-4 rounded border overflow-auto">
                     {result}
                   </pre>
                 </div>
               ) : (
                 <p className="text-gray-500 dark:text-gray-400 text-center">
-                  Выберите действие для анализа статьи
+                  Нажмите "Парсить статью" для извлечения данных из статьи
                 </p>
               )}
             </div>
