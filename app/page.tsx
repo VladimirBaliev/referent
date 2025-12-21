@@ -4,11 +4,18 @@ import { useState } from 'react'
 
 type ActionType = 'summary' | 'thesis' | 'telegram' | null
 
+interface ParsedArticle {
+  date: string | null
+  title: string
+  content: string
+}
+
 export default function Home() {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
   const [activeAction, setActiveAction] = useState<ActionType>(null)
+  const [parsedArticle, setParsedArticle] = useState<ParsedArticle | null>(null)
 
   const handleParse = async () => {
     if (!url.trim()) {
@@ -36,12 +43,51 @@ export default function Home() {
 
       const data = await response.json()
       
+      // Сохраняем распарсенные данные для перевода
+      setParsedArticle(data)
+      
       // Форматируем JSON для красивого отображения
       setResult(JSON.stringify(data, null, 2))
     } catch (error) {
       setResult(JSON.stringify({
         error: error instanceof Error ? error.message : 'Неизвестная ошибка'
       }, null, 2))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleTranslate = async () => {
+    if (!parsedArticle || !parsedArticle.content) {
+      alert('Сначала распарсите статью, чтобы получить контент для перевода')
+      return
+    }
+
+    setLoading(true)
+    setActiveAction(null)
+    setResult('')
+
+    try {
+      // Переводим заголовок и контент
+      const textToTranslate = `Title: ${parsedArticle.title}\n\n${parsedArticle.content}`
+
+      const response = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: textToTranslate }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Ошибка при переводе статьи')
+      }
+
+      const data = await response.json()
+      setResult(data.translation || 'Перевод не получен')
+    } catch (error) {
+      setResult(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
     } finally {
       setLoading(false)
     }
@@ -96,14 +142,21 @@ export default function Home() {
             />
           </div>
 
-          {/* Кнопка парсинга */}
-          <div className="mb-6">
+          {/* Кнопки парсинга и перевода */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             <button
               onClick={handleParse}
               disabled={loading}
-              className="w-full px-6 py-3 bg-indigo-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-indigo-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Парсить статью
+            </button>
+            <button
+              onClick={handleTranslate}
+              disabled={loading || !parsedArticle}
+              className="px-6 py-3 bg-orange-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Перевести статью
             </button>
           </div>
 
