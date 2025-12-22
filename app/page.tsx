@@ -94,8 +94,13 @@ export default function Home() {
   }
 
   const handleAction = async (action: ActionType) => {
-    if (!url.trim()) {
-      alert('Пожалуйста, введите URL статьи')
+    // Проверка наличия распарсенных данных
+    if (!parsedArticle || !parsedArticle.content) {
+      alert('Сначала распарсите статью, чтобы получить данные для обработки')
+      return
+    }
+
+    if (!action) {
       return
     }
 
@@ -103,17 +108,39 @@ export default function Home() {
     setActiveAction(action)
     setResult('')
 
-    // Имитация запроса к API
-    // Здесь будет реальный запрос к вашему API
-    setTimeout(() => {
-      const mockResults = {
-        summary: 'Статья рассказывает о...',
-        thesis: '• Тезис 1\n• Тезис 2\n• Тезис 3',
-        telegram: '📰 Заголовок статьи\n\nКраткое описание...'
+    try {
+      // Формируем текст для обработки (заголовок + контент)
+      const textToProcess = `Title: ${parsedArticle.title}\n\n${parsedArticle.content}`
+
+      const response = await fetch('/api/ai-process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          text: textToProcess,
+          action: action
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Ошибка при обработке статьи')
       }
-      setResult(mockResults[action!] || '')
+
+      const data = await response.json()
+      
+      // Отображаем результат
+      if (data.result) {
+        setResult(data.result)
+      } else {
+        throw new Error('Результат не получен от AI')
+      }
+    } catch (error) {
+      setResult(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+    } finally {
       setLoading(false)
-    }, 2000)
+    }
   }
 
   return (
@@ -164,36 +191,36 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <button
               onClick={() => handleAction('summary')}
-              disabled={loading}
+              disabled={loading || !parsedArticle}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                 activeAction === 'summary'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-blue-500 text-white hover:bg-blue-600'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              О чем статья?
+              {loading && activeAction === 'summary' ? 'Обработка...' : 'О чем статья?'}
             </button>
             <button
               onClick={() => handleAction('thesis')}
-              disabled={loading}
+              disabled={loading || !parsedArticle}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                 activeAction === 'thesis'
                   ? 'bg-green-600 text-white shadow-lg'
                   : 'bg-green-500 text-white hover:bg-green-600'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              Тезисы
+              {loading && activeAction === 'thesis' ? 'Обработка...' : 'Тезисы'}
             </button>
             <button
               onClick={() => handleAction('telegram')}
-              disabled={loading}
+              disabled={loading || !parsedArticle}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                 activeAction === 'telegram'
                   ? 'bg-purple-600 text-white shadow-lg'
                   : 'bg-purple-500 text-white hover:bg-purple-600'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              Пост для Telegram
+              {loading && activeAction === 'telegram' ? 'Обработка...' : 'Пост для Telegram'}
             </button>
           </div>
 
@@ -204,21 +231,34 @@ export default function Home() {
             </h2>
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 min-h-[200px] border border-gray-200 dark:border-gray-700">
               {loading ? (
-                <div className="flex items-center justify-center">
+                <div className="flex flex-col items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                  <span className="ml-4 text-gray-600 dark:text-gray-400">
-                    Генерация результата...
+                  <span className="mt-4 text-gray-600 dark:text-gray-400">
+                    {activeAction === 'summary' && 'Генерация резюме...'}
+                    {activeAction === 'thesis' && 'Извлечение тезисов...'}
+                    {activeAction === 'telegram' && 'Создание поста для Telegram...'}
+                    {!activeAction && 'Обработка...'}
                   </span>
                 </div>
               ) : result ? (
                 <div className="max-w-none">
-                  <pre className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 font-mono text-sm bg-gray-100 dark:bg-gray-800 p-4 rounded border overflow-auto">
-                    {result}
-                  </pre>
+                  {result.startsWith('Ошибка:') ? (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                      <p className="text-red-800 dark:text-red-200 font-medium">{result}</p>
+                    </div>
+                  ) : (
+                    <div className="prose dark:prose-invert max-w-none">
+                      <div className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 text-base leading-relaxed bg-white dark:bg-gray-800 p-4 rounded border overflow-auto">
+                        {result}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-center">
-                  Нажмите "Парсить статью" для извлечения данных из статьи
+                <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+                  {!parsedArticle 
+                    ? 'Нажмите "Парсить статью" для извлечения данных из статьи'
+                    : 'Выберите действие для обработки статьи'}
                 </p>
               )}
             </div>
