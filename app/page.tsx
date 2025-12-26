@@ -153,11 +153,13 @@ export default function Home() {
     // Очищаем предыдущий результат и устанавливаем состояние загрузки
     // Важно: сначала устанавливаем активное действие, затем очищаем результат
     setActiveAction(action)
-    setResult('') // Очищаем предыдущий результат (переведенный текст)
+    // Принудительно очищаем результат перед запросом (используем функциональное обновление)
+    setResult(() => '')
     setLoading(true)
 
     try {
       // Формируем текст для обработки (заголовок + контент)
+      // Используем оригинальный текст из parsedArticle, а не переведенный
       const textToProcess = `Title: ${parsedArticle.title}\n\n${parsedArticle.content}`
 
       const response = await fetch('/api/ai-process', {
@@ -184,7 +186,8 @@ export default function Home() {
         // Убеждаемся, что результат не пустой и не является просто текстом статьи
         const resultText = data.result.trim()
         if (resultText.length > 0) {
-          setResult(resultText)
+          // Принудительно обновляем результат, используя функциональное обновление
+          setResult(() => resultText)
           // Сохраняем результат в кэш
           setResultsCache(prev => ({
             ...prev,
