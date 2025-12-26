@@ -143,6 +143,12 @@ export default function Home() {
       return
     }
 
+    // Проверка наличия URL
+    if (!url.trim()) {
+      alert('Сначала введите URL статьи')
+      return
+    }
+
     // Проверка наличия распарсенных данных и готовности статьи
     if (!parsedArticle || !parsedArticle.content) {
       alert('Сначала распарсите статью, чтобы получить данные для обработки')
@@ -249,10 +255,20 @@ export default function Home() {
               type="url"
               value={url}
               onChange={(e) => {
-                setUrl(e.target.value)
+                const newUrl = e.target.value
+                setUrl(newUrl)
                 // Очищаем ошибку при вводе
                 if (urlError) {
                   setUrlError('')
+                }
+                // Если URL очищен, сбрасываем все связанные состояния
+                if (!newUrl.trim()) {
+                  setParsedArticle(null)
+                  setIsReady(false)
+                  setResult('')
+                  setTranslatedText('')
+                  setResultsCache({})
+                  setActiveAction(null)
                 }
               }}
               onBlur={() => {
