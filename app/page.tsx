@@ -74,11 +74,34 @@ export default function Home() {
 
       const data = await response.json()
       
-      // Сохраняем распарсенные данные для перевода
+      // Сохраняем распарсенные данные
       setParsedArticle(data)
       
-      // Форматируем JSON для красивого отображения
-      setResult(JSON.stringify(data, null, 2))
+      // Автоматически переводим статью после парсинга
+      const textToTranslate = `Title: ${data.title}\n\n${data.content}`
+      
+      try {
+        const translateResponse = await fetch('/api/translate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: textToTranslate }),
+        })
+
+        if (!translateResponse.ok) {
+          const error = await translateResponse.json()
+          throw new Error(error.error || 'Ошибка при переводе статьи')
+        }
+
+        const translateData = await translateResponse.json()
+        // Отображаем переведенный текст
+        setResult(translateData.translation || 'Перевод не получен')
+      } catch (translateError) {
+        // Если перевод не удался, показываем распарсенные данные
+        setResult(JSON.stringify(data, null, 2))
+        console.error('Ошибка при переводе:', translateError)
+      }
     } catch (error) {
       setResult(JSON.stringify({
         error: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -88,41 +111,6 @@ export default function Home() {
     }
   }
 
-  const handleTranslate = async () => {
-    if (!parsedArticle || !parsedArticle.content) {
-      alert('Сначала распарсите статью, чтобы получить контент для перевода')
-      return
-    }
-
-    setLoading(true)
-    setActiveAction(null)
-    setResult('')
-
-    try {
-      // Переводим заголовок и контент
-      const textToTranslate = `Title: ${parsedArticle.title}\n\n${parsedArticle.content}`
-
-      const response = await fetch('/api/translate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: textToTranslate }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Ошибка при переводе статьи')
-      }
-
-      const data = await response.json()
-      setResult(data.translation || 'Перевод не получен')
-    } catch (error) {
-      setResult(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleAction = async (action: ActionType) => {
     // Проверка наличия распарсенных данных
@@ -248,21 +236,14 @@ export default function Home() {
             )}
           </div>
 
-          {/* Кнопки парсинга и перевода */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          {/* Кнопка парсинга */}
+          <div className="mb-6">
             <button
               onClick={handleParse}
               disabled={loading}
-              className="px-6 py-3 bg-indigo-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-6 py-3 bg-indigo-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Парсить статью
-            </button>
-            <button
-              onClick={handleTranslate}
-              disabled={loading || !parsedArticle}
-              className="px-6 py-3 bg-orange-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Перевести статью
+              {loading ? 'Парсинг и перевод...' : 'Парсить и перевести статью'}
             </button>
           </div>
 
