@@ -25,6 +25,8 @@ export default function Home() {
   const [resultsCache, setResultsCache] = useState<Record<string, CachedResult>>({})
   // Состояние для ошибки валидации URL
   const [urlError, setUrlError] = useState<string>('')
+  // Отдельное состояние для переведенного текста
+  const [translatedText, setTranslatedText] = useState<string>('')
 
   // Функция для создания уникального ключа кэша
   const getCacheKey = (article: ParsedArticle, action: ActionType): string => {
@@ -107,8 +109,11 @@ export default function Home() {
         }
 
         const translateData = await translateResponse.json()
-        // Отображаем переведенный текст
-        setResult(translateData.translation || 'Перевод не получен')
+        // Сохраняем переведенный текст в отдельное состояние
+        const translation = translateData.translation || 'Перевод не получен'
+        setTranslatedText(translation)
+        // Отображаем переведенный текст в результате
+        setResult(translation)
       } catch (translateError) {
         // Если перевод не удался, показываем распарсенные данные
         setResult(JSON.stringify(data, null, 2))
@@ -154,7 +159,8 @@ export default function Home() {
     // Важно: сначала устанавливаем активное действие и loading, затем очищаем результат
     setActiveAction(action)
     setLoading(true)
-    // Очищаем результат после установки loading, чтобы гарантировать обновление UI
+    // Принудительно очищаем результат перед запросом
+    // Используем пустую строку, чтобы гарантировать обновление UI
     setResult('')
 
     try {
