@@ -10,12 +10,19 @@ interface ParsedArticle {
   content: string
 }
 
+interface CachedResult {
+  result: string
+  timestamp: number
+}
+
 export default function Home() {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
   const [activeAction, setActiveAction] = useState<ActionType>(null)
   const [parsedArticle, setParsedArticle] = useState<ParsedArticle | null>(null)
+  // Кэш результатов для каждого типа действия
+  const [resultsCache, setResultsCache] = useState<Record<string, CachedResult>>({})
 
   const handleParse = async () => {
     if (!url.trim()) {
@@ -26,6 +33,9 @@ export default function Home() {
     setLoading(true)
     setActiveAction(null)
     setResult('')
+    // Очищаем кэш при парсинге новой статьи
+    setResultsCache({})
+    setParsedArticle(null)
 
     try {
       const response = await fetch('/api/parse', {
@@ -104,6 +114,16 @@ export default function Home() {
       return
     }
 
+    // Проверяем кэш - если результат уже есть, показываем его без запроса
+    const cacheKey = `${parsedArticle.title}_${action}`
+    const cachedResult = resultsCache[cacheKey]
+    
+    if (cachedResult) {
+      setActiveAction(action)
+      setResult(cachedResult.result)
+      return
+    }
+
     setLoading(true)
     setActiveAction(action)
     setResult('')
@@ -133,6 +153,14 @@ export default function Home() {
       // Отображаем результат
       if (data.result) {
         setResult(data.result)
+        // Сохраняем результат в кэш
+        setResultsCache(prev => ({
+          ...prev,
+          [cacheKey]: {
+            result: data.result,
+            timestamp: Date.now()
+          }
+        }))
       } else {
         throw new Error('Результат не получен от AI')
       }
@@ -189,39 +217,42 @@ export default function Home() {
 
           {/* Кнопки действий */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <button
-              onClick={() => handleAction('summary')}
-              disabled={loading || !parsedArticle}
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-                activeAction === 'summary'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {loading && activeAction === 'summary' ? 'Обработка...' : 'О чем статья?'}
-            </button>
-            <button
-              onClick={() => handleAction('thesis')}
-              disabled={loading || !parsedArticle}
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-                activeAction === 'thesis'
-                  ? 'bg-green-600 text-white shadow-lg'
-                  : 'bg-green-500 text-white hover:bg-green-600'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {loading && activeAction === 'thesis' ? 'Обработка...' : 'Тезисы'}
-            </button>
-            <button
-              onClick={() => handleAction('telegram')}
-              disabled={loading || !parsedArticle}
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-                activeAction === 'telegram'
-                  ? 'bg-purple-600 text-white shadow-lg'
-                  : 'bg-purple-500 text-white hover:bg-purple-600'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {loading && activeAction === 'telegram' ? 'Обработка...' : 'Пост для Telegram'}
-            </button>
+            {(['summary', 'thesis', 'telegram'] as const).map((action) => {
+              const cacheKey = parsedArticle ? `${parsedArticle.title}_${action}` : ''
+              const isCached = cacheKey && resultsCache[cacheKey]
+              const buttonLabels = {
+                summary: 'О чем статья?',
+                thesis: 'Тезисы',
+                telegram: 'Пост для Telegram'
+              }
+              const buttonColors = {
+                summary: { active: 'bg-blue-600', inactive: 'bg-blue-500', hover: 'hover:bg-blue-600' },
+                thesis: { active: 'bg-green-600', inactive: 'bg-green-500', hover: 'hover:bg-green-600' },
+                telegram: { active: 'bg-purple-600', inactive: 'bg-purple-500', hover: 'hover:bg-purple-600' }
+              }
+
+              return (
+                <button
+                  key={action}
+                  onClick={() => handleAction(action)}
+                  disabled={loading || !parsedArticle}
+                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 relative ${
+                    activeAction === action
+                      ? `${buttonColors[action].active} text-white shadow-lg`
+                      : `${buttonColors[action].inactive} text-white ${buttonColors[action].hover}`
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    {loading && activeAction === action ? 'Обработка...' : buttonLabels[action]}
+                    {isCached && !loading && (
+                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded" title="Результат закэширован">
+                        ✓
+                      </span>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           {/* Блок для отображения результата */}
