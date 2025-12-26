@@ -23,6 +23,8 @@ export default function Home() {
   const [parsedArticle, setParsedArticle] = useState<ParsedArticle | null>(null)
   // Кэш результатов для каждого типа действия
   const [resultsCache, setResultsCache] = useState<Record<string, CachedResult>>({})
+  // Состояние для ошибки валидации URL
+  const [urlError, setUrlError] = useState<string>('')
 
   // Функция для создания уникального ключа кэша
   const getCacheKey = (article: ParsedArticle, action: ActionType): string => {
@@ -32,14 +34,26 @@ export default function Home() {
   }
 
   const handleParse = async () => {
-    if (!url.trim()) {
-      alert('Пожалуйста, введите URL статьи')
+    // Валидация URL
+    const trimmedUrl = url.trim()
+    if (!trimmedUrl) {
+      setUrlError('Пожалуйста, введите URL статьи')
+      return
+    }
+
+    // Проверка формата URL
+    try {
+      new URL(trimmedUrl)
+      setUrlError('')
+    } catch {
+      setUrlError('Введите корректный URL (например, https://example.com/article)')
       return
     }
 
     setLoading(true)
     setActiveAction(null)
     setResult('')
+    setUrlError('')
     // Очищаем кэш при парсинге новой статьи
     setResultsCache({})
     setParsedArticle(null)
@@ -198,10 +212,40 @@ export default function Home() {
               id="article-url"
               type="url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value)
+                // Очищаем ошибку при вводе
+                if (urlError) {
+                  setUrlError('')
+                }
+              }}
+              onBlur={() => {
+                // Валидация при потере фокуса
+                const trimmedUrl = url.trim()
+                if (!trimmedUrl) {
+                  setUrlError('Пожалуйста, введите URL статьи')
+                } else {
+                  try {
+                    new URL(trimmedUrl)
+                    setUrlError('')
+                  } catch {
+                    setUrlError('Введите корректный URL (например, https://example.com/article)')
+                  }
+                }
+              }}
               placeholder="https://example.com/article"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
+                urlError
+                  ? 'border-red-500 dark:border-red-500 focus:ring-red-500'
+                  : 'border-gray-300 dark:border-gray-600'
+              }`}
             />
+            {urlError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <span>⚠️</span>
+                {urlError}
+              </p>
+            )}
           </div>
 
           {/* Кнопки парсинга и перевода */}
