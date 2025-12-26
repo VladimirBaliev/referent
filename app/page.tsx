@@ -34,6 +34,11 @@ export default function Home() {
   }
 
   const handleParse = async () => {
+    // Предотвращаем повторный вызов, если уже выполняется парсинг
+    if (loading) {
+      return
+    }
+
     // Валидация URL
     const trimmedUrl = url.trim()
     if (!trimmedUrl) {
@@ -42,11 +47,18 @@ export default function Home() {
     }
 
     // Проверка формата URL
+    let isValidUrl = false
     try {
       new URL(trimmedUrl)
+      isValidUrl = true
       setUrlError('')
     } catch {
       setUrlError('Введите корректный URL (например, https://example.com/article)')
+      return
+    }
+
+    // Не запускаем парсинг, если URL не валидный
+    if (!isValidUrl) {
       return
     }
 
@@ -208,7 +220,7 @@ export default function Home() {
                 }
               }}
               onBlur={() => {
-                // Валидация при потере фокуса
+                // Валидация и автоматический парсинг при потере фокуса
                 const trimmedUrl = url.trim()
                 if (!trimmedUrl) {
                   setUrlError('Пожалуйста, введите URL статьи')
@@ -216,8 +228,28 @@ export default function Home() {
                   try {
                     new URL(trimmedUrl)
                     setUrlError('')
+                    // Автоматически запускаем парсинг и перевод
+                    handleParse()
                   } catch {
                     setUrlError('Введите корректный URL (например, https://example.com/article)')
+                  }
+                }
+              }}
+              onKeyDown={(e) => {
+                // Автоматический парсинг при нажатии Enter
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  const trimmedUrl = url.trim()
+                  if (trimmedUrl) {
+                    try {
+                      new URL(trimmedUrl)
+                      setUrlError('')
+                      handleParse()
+                    } catch {
+                      setUrlError('Введите корректный URL (например, https://example.com/article)')
+                    }
+                  } else {
+                    setUrlError('Пожалуйста, введите URL статьи')
                   }
                 }
               }}
@@ -236,16 +268,13 @@ export default function Home() {
             )}
           </div>
 
-          {/* Кнопка парсинга */}
-          <div className="mb-6">
-            <button
-              onClick={handleParse}
-              disabled={loading}
-              className="w-full px-6 py-3 bg-indigo-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Парсинг и перевод...' : 'Парсить и перевести статью'}
-            </button>
-          </div>
+          {/* Индикатор загрузки парсинга */}
+          {loading && (
+            <div className="mb-6 flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+              <span className="text-sm font-medium">Парсинг и перевод статьи...</span>
+            </div>
+          )}
 
           {/* Кнопки действий */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
