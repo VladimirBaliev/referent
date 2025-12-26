@@ -27,6 +27,8 @@ export default function Home() {
   const [urlError, setUrlError] = useState<string>('')
   // Отдельное состояние для переведенного текста
   const [translatedText, setTranslatedText] = useState<string>('')
+  // Состояние для отслеживания завершения парсинга и перевода
+  const [isReady, setIsReady] = useState(false)
 
   // Функция для создания уникального ключа кэша
   const getCacheKey = (article: ParsedArticle, action: ActionType): string => {
@@ -67,6 +69,8 @@ export default function Home() {
     setLoading(true)
     setActiveAction(null)
     setResult('')
+    setTranslatedText('') // Очищаем переведенный текст
+    setIsReady(false) // Статья еще не готова
     setUrlError('')
     // Очищаем кэш при парсинге новой статьи
     setResultsCache({})
@@ -114,10 +118,14 @@ export default function Home() {
         setTranslatedText(translation)
         // Отображаем переведенный текст в результате
         setResult(translation)
+        // Статья готова для AI-обработки
+        setIsReady(true)
       } catch (translateError) {
         // Если перевод не удался, показываем распарсенные данные
         setResult(JSON.stringify(data, null, 2))
         console.error('Ошибка при переводе:', translateError)
+        // Статья все равно готова для AI-обработки (даже без перевода)
+        setIsReady(true)
       }
     } catch (error) {
       setResult(JSON.stringify({
@@ -130,18 +138,23 @@ export default function Home() {
 
 
   const handleAction = async (action: ActionType) => {
-    // Проверка наличия распарсенных данных
+    // Предотвращаем повторный вызов, если уже выполняется обработка
+    if (loading) {
+      return
+    }
+
+    // Проверка наличия распарсенных данных и готовности статьи
     if (!parsedArticle || !parsedArticle.content) {
       alert('Сначала распарсите статью, чтобы получить данные для обработки')
       return
     }
 
-    if (!action) {
+    if (!isReady) {
+      alert('Дождитесь завершения парсинга и перевода статьи')
       return
     }
 
-    // Предотвращаем повторный вызов, если уже выполняется обработка
-    if (loading) {
+    if (!action) {
       return
     }
 
@@ -318,8 +331,13 @@ export default function Home() {
               return (
                 <button
                   key={action}
-                  onClick={() => handleAction(action)}
-                  disabled={loading || !parsedArticle}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleAction(action)
+                  }}
+                  disabled={loading || !parsedArticle || !isReady}
                   className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 relative ${
                     activeAction === action
                       ? `${buttonColors[action].active} text-white shadow-lg`
