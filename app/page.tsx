@@ -135,6 +135,11 @@ export default function Home() {
       return
     }
 
+    // Предотвращаем повторный вызов, если уже выполняется обработка
+    if (loading) {
+      return
+    }
+
     // Проверяем кэш - если результат уже есть, показываем его без запроса
     const cacheKey = getCacheKey(parsedArticle, action)
     const cachedResult = resultsCache[cacheKey]
@@ -145,9 +150,11 @@ export default function Home() {
       return
     }
 
-    setLoading(true)
+    // Очищаем предыдущий результат и устанавливаем состояние загрузки
+    // Важно: сначала устанавливаем активное действие, затем очищаем результат
     setActiveAction(action)
-    setResult('')
+    setResult('') // Очищаем предыдущий результат (переведенный текст)
+    setLoading(true)
 
     try {
       // Формируем текст для обработки (заголовок + контент)
@@ -173,18 +180,24 @@ export default function Home() {
       const data = await response.json()
       
       // Отображаем результат
-      if (data.result) {
-        setResult(data.result)
-        // Сохраняем результат в кэш
-        setResultsCache(prev => ({
-          ...prev,
-          [cacheKey]: {
-            result: data.result,
-            timestamp: Date.now()
-          }
-        }))
+      if (data.result && typeof data.result === 'string') {
+        // Убеждаемся, что результат не пустой и не является просто текстом статьи
+        const resultText = data.result.trim()
+        if (resultText.length > 0) {
+          setResult(resultText)
+          // Сохраняем результат в кэш
+          setResultsCache(prev => ({
+            ...prev,
+            [cacheKey]: {
+              result: resultText,
+              timestamp: Date.now()
+            }
+          }))
+        } else {
+          throw new Error('Получен пустой результат от AI')
+        }
       } else {
-        throw new Error('Результат не получен от AI')
+        throw new Error('Результат не получен от AI или имеет неверный формат')
       }
     } catch (error) {
       setResult(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
