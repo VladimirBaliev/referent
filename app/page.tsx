@@ -160,7 +160,8 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           text: textToProcess,
-          action: action
+          action: action,
+          sourceUrl: url.trim() // Передаем URL источника для Telegram поста
         }),
       })
 
