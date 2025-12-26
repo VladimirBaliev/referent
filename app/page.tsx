@@ -24,6 +24,13 @@ export default function Home() {
   // Кэш результатов для каждого типа действия
   const [resultsCache, setResultsCache] = useState<Record<string, CachedResult>>({})
 
+  // Функция для создания уникального ключа кэша
+  const getCacheKey = (article: ParsedArticle, action: ActionType): string => {
+    // Используем URL, заголовок и первые 100 символов контента для уникальности
+    const contentHash = article.content.substring(0, 100).replace(/\s+/g, ' ').trim()
+    return `${url}_${article.title}_${contentHash}_${action}`
+  }
+
   const handleParse = async () => {
     if (!url.trim()) {
       alert('Пожалуйста, введите URL статьи')
@@ -115,7 +122,7 @@ export default function Home() {
     }
 
     // Проверяем кэш - если результат уже есть, показываем его без запроса
-    const cacheKey = `${parsedArticle.title}_${action}`
+    const cacheKey = getCacheKey(parsedArticle, action)
     const cachedResult = resultsCache[cacheKey]
     
     if (cachedResult) {
