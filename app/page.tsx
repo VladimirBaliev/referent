@@ -175,12 +175,11 @@ export default function Home() {
     }
 
     // Очищаем предыдущий результат и устанавливаем состояние загрузки
-    // Важно: сначала устанавливаем активное действие и loading, затем очищаем результат
+    // Важно: сначала устанавливаем активное действие, затем loading, затем очищаем результат
+    // Устанавливаем activeAction синхронно перед loading, чтобы индикатор парсинга не показывался
     setActiveAction(action)
-    setLoading(true)
-    // Принудительно очищаем результат перед запросом
-    // Используем пустую строку, чтобы гарантировать обновление UI
     setResult('')
+    setLoading(true)
 
     try {
       // Формируем текст для обработки (заголовок + контент)
@@ -321,7 +320,7 @@ export default function Home() {
           </div>
 
           {/* Индикатор загрузки парсинга */}
-          {loading && (
+          {loading && !activeAction && (
             <div className="mb-6 flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
               <span className="text-sm font-medium">Парсинг и перевод статьи...</span>
