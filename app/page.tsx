@@ -29,6 +29,8 @@ export default function Home() {
   const [translatedText, setTranslatedText] = useState<string>('')
   // Состояние для отслеживания завершения парсинга и перевода
   const [isReady, setIsReady] = useState(false)
+  // Флаг для предотвращения срабатывания onBlur при клике на кнопки
+  const [isButtonClick, setIsButtonClick] = useState(false)
 
   // Функция для создания уникального ключа кэша
   const getCacheKey = (article: ParsedArticle, action: ActionType): string => {
@@ -40,6 +42,11 @@ export default function Home() {
   const handleParse = async () => {
     // Предотвращаем повторный вызов, если уже выполняется парсинг
     if (loading) {
+      return
+    }
+
+    // Не запускаем парсинг, если активна какая-то кнопка AI-обработки
+    if (activeAction) {
       return
     }
 
@@ -143,6 +150,11 @@ export default function Home() {
       return
     }
 
+    // Проверка наличия action
+    if (!action) {
+      return
+    }
+
     // Проверка наличия URL
     if (!url.trim()) {
       alert('Сначала введите URL статьи')
@@ -157,10 +169,6 @@ export default function Home() {
 
     if (!isReady) {
       alert('Дождитесь завершения парсинга и перевода статьи')
-      return
-    }
-
-    if (!action) {
       return
     }
 
@@ -270,7 +278,12 @@ export default function Home() {
                   setActiveAction(null)
                 }
               }}
-              onBlur={() => {
+              onBlur={(e) => {
+                // Не запускаем парсинг, если фокус перешел на кнопку
+                if (isButtonClick) {
+                  setIsButtonClick(false)
+                  return
+                }
                 // Валидация и автоматический парсинг при потере фокуса
                 const trimmedUrl = url.trim()
                 if (!trimmedUrl) {
@@ -347,9 +360,15 @@ export default function Home() {
                 <button
                   key={action}
                   type="button"
+                  onMouseDown={(e) => {
+                    // Устанавливаем флаг перед кликом, чтобы предотвратить onBlur
+                    setIsButtonClick(true)
+                  }}
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
+                    // Сбрасываем флаг после небольшой задержки
+                    setTimeout(() => setIsButtonClick(false), 100)
                     handleAction(action)
                   }}
                   disabled={loading || !parsedArticle || !isReady}
