@@ -49,8 +49,23 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       console.error('OpenRouter API error:', errorData)
+      
+      // Обработка различных типов ошибок с понятными сообщениями
+      let errorMessage = 'Ошибка при переводе текста'
+      if (response.status === 429) {
+        errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
+      } else if (response.status === 401) {
+        errorMessage = 'Ошибка аутентификации API. Проверьте настройки API ключа.'
+      } else if (response.status === 403) {
+        errorMessage = 'Доступ запрещен. Проверьте права доступа API ключа.'
+      } else if (response.status >= 500) {
+        errorMessage = 'Сервис перевода временно недоступен. Попробуйте позже.'
+      } else {
+        errorMessage = `Ошибка API: ${response.statusText || 'Неизвестная ошибка'}`
+      }
+      
       return NextResponse.json(
-        { error: `OpenRouter API error: ${response.statusText}`, details: errorData },
+        { error: errorMessage, details: errorData },
         { status: response.status }
       )
     }
@@ -59,12 +74,19 @@ export async function POST(request: NextRequest) {
 
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
       return NextResponse.json(
-        { error: 'Invalid response from OpenRouter API' },
+        { error: 'Получен некорректный ответ от API перевода' },
         { status: 500 }
       )
     }
 
     const translatedText = data.choices[0].message.content
+
+    if (!translatedText || typeof translatedText !== 'string') {
+      return NextResponse.json(
+        { error: 'Перевод не получен от API' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       translation: translatedText,
@@ -74,8 +96,11 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Translate error:', error)
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Произошла неизвестная ошибка при переводе'
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

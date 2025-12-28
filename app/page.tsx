@@ -121,15 +121,39 @@ export default function Home() {
 
         const translateData = await translateResponse.json()
         // Сохраняем переведенный текст в отдельное состояние
-        const translation = translateData.translation || 'Перевод не получен'
-        setTranslatedText(translation)
-        // Отображаем переведенный текст в результате
-        setResult(translation)
-        // Статья готова для AI-обработки
-        setIsReady(true)
+        const translation = translateData.translation
+        
+        // Проверяем, что перевод получен и не пустой
+        if (translation && typeof translation === 'string' && translation.trim().length > 0) {
+          setTranslatedText(translation)
+          // Отображаем переведенный текст в результате
+          setResult(translation)
+          // Статья готова для AI-обработки
+          setIsReady(true)
+        } else {
+          // Если перевод пустой или не получен, показываем оригинальный текст с предупреждением
+          const originalText = `Заголовок: ${data.title}\n\n${data.content}`
+          setResult(`⚠️ Не удалось получить перевод. Оригинальный текст:\n\n${originalText}`)
+          setTranslatedText('')
+          setIsReady(true)
+        }
       } catch (translateError) {
-        // Если перевод не удался, показываем распарсенные данные
-        setResult(JSON.stringify(data, null, 2))
+        // Если перевод не удался, показываем понятное сообщение об ошибке
+        const errorMessage = translateError instanceof Error ? translateError.message : 'Неизвестная ошибка'
+        
+        // Определяем, является ли это ошибкой лимита запросов
+        const isRateLimitError = errorMessage.includes('лимит') || errorMessage.includes('429') || errorMessage.includes('Too Many Requests')
+        
+        if (isRateLimitError) {
+          // Для ошибки лимита показываем только сообщение, без оригинального текста
+          setResult(`⚠️ Ошибка: ${errorMessage}\n\nПожалуйста, подождите немного и попробуйте снова.`)
+        } else {
+          // Для других ошибок показываем оригинальный текст с сообщением
+          const originalText = `Заголовок: ${data.title}\n\n${data.content}`
+          setResult(`⚠️ Ошибка при переводе: ${errorMessage}\n\nОригинальный текст (на английском):\n\n${originalText}`)
+        }
+        
+        setTranslatedText('')
         console.error('Ошибка при переводе:', translateError)
         // Статья все равно готова для AI-обработки (даже без перевода)
         setIsReady(true)
