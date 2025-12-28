@@ -208,7 +208,9 @@ export default function Home() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Ошибка при обработке статьи')
+        // Используем сообщение об ошибке от сервера, если оно есть
+        const errorMessage = error.error || 'Ошибка при обработке статьи'
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -428,7 +430,13 @@ export default function Home() {
                 <div className="max-w-none">
                   {result.startsWith('Ошибка:') ? (
                     <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                      <p className="text-red-800 dark:text-red-200 font-medium">{result}</p>
+                      <div className="flex items-start gap-2">
+                        <span className="text-red-600 dark:text-red-400 text-xl">⚠️</span>
+                        <div className="flex-1">
+                          <p className="text-red-800 dark:text-red-200 font-medium mb-1">Произошла ошибка</p>
+                          <p className="text-red-700 dark:text-red-300 text-sm">{result.replace('Ошибка: ', '')}</p>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="prose dark:prose-invert max-w-none">

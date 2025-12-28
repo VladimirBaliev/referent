@@ -59,21 +59,21 @@ export async function POST(request: NextRequest) {
     // Валидация входных данных
     if (!text || typeof text !== 'string') {
       return NextResponse.json(
-        { error: 'Text is required' },
+        { error: 'Текст для обработки не предоставлен' },
         { status: 400 }
       )
     }
 
     if (!action || typeof action !== 'string') {
       return NextResponse.json(
-        { error: 'Action is required' },
+        { error: 'Тип действия не указан' },
         { status: 400 }
       )
     }
 
     if (!['summary', 'thesis', 'telegram'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be one of: summary, thesis, telegram' },
+        { error: 'Недопустимый тип действия. Допустимые значения: summary, thesis, telegram' },
         { status: 400 }
       )
     }
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       console.error('OPENROUTER_API_KEY is not configured')
       return NextResponse.json(
-        { error: 'OPENROUTER_API_KEY is not configured' },
+        { error: 'API ключ не настроен. Обратитесь к администратору.' },
         { status: 500 }
       )
     }
@@ -138,7 +138,19 @@ export async function POST(request: NextRequest) {
           statusText: response.statusText,
           error: errorData
         })
-        throw new Error(`OpenRouter API error: ${response.statusText}`)
+        
+        // Обработка различных типов ошибок
+        if (response.status === 429) {
+          throw new Error('Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.')
+        } else if (response.status === 401) {
+          throw new Error('Ошибка аутентификации API. Проверьте настройки API ключа.')
+        } else if (response.status === 403) {
+          throw new Error('Доступ запрещен. Проверьте права доступа API ключа.')
+        } else if (response.status >= 500) {
+          throw new Error('Сервис временно недоступен. Попробуйте позже.')
+        } else {
+          throw new Error(`Ошибка API: ${response.statusText || 'Неизвестная ошибка'}`)
+        }
       }
 
       const data = await response.json()
@@ -146,14 +158,14 @@ export async function POST(request: NextRequest) {
       // Валидация ответа от API
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         console.error('Invalid response from OpenRouter API:', data)
-        throw new Error('Invalid response from OpenRouter API')
+        throw new Error('Получен некорректный ответ от API')
       }
 
       const result = data.choices[0].message.content
 
       if (!result || typeof result !== 'string') {
         console.error('Empty or invalid result from API:', data)
-        throw new Error('Empty result from AI')
+        throw new Error('Получен пустой результат от AI')
       }
 
       return result
@@ -205,10 +217,26 @@ export async function POST(request: NextRequest) {
           statusText: response.statusText,
           error: errorData
         })
+        
+        // Обработка различных типов ошибок с понятными сообщениями
+        let errorMessage = 'Ошибка при обработке запроса'
+        if (response.status === 429) {
+          errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
+        } else if (response.status === 401) {
+          errorMessage = 'Ошибка аутентификации API. Проверьте настройки API ключа.'
+        } else if (response.status === 403) {
+          errorMessage = 'Доступ запрещен. Проверьте права доступа API ключа.'
+        } else if (response.status >= 500) {
+          errorMessage = 'Сервис временно недоступен. Попробуйте позже.'
+        } else {
+          errorMessage = `Ошибка API: ${response.statusText || 'Неизвестная ошибка'}`
+        }
+        
         return NextResponse.json(
           { 
-            error: `OpenRouter API error: ${response.statusText}`, 
-            details: errorData 
+            error: errorMessage, 
+            details: errorData,
+            statusCode: response.status
           },
           { status: response.status }
         )
@@ -219,7 +247,7 @@ export async function POST(request: NextRequest) {
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         console.error('Invalid response from OpenRouter API:', data)
         return NextResponse.json(
-          { error: 'Invalid response from OpenRouter API' },
+          { error: 'Получен некорректный ответ от API' },
           { status: 500 }
         )
       }
@@ -228,7 +256,7 @@ export async function POST(request: NextRequest) {
       if (!finalResult || typeof finalResult !== 'string') {
         console.error('Empty or invalid result from API:', data)
         return NextResponse.json(
-          { error: 'Empty result from AI' },
+          { error: 'Получен пустой результат от AI' },
           { status: 500 }
         )
       }
@@ -239,9 +267,14 @@ export async function POST(request: NextRequest) {
       // Длинная статья - обрабатываем по частям
       const chunkResults: string[] = []
 
-      for (let i = 0; i < textChunks.length; i++) {
-        const chunkResult = await makeApiRequest(textChunks[i], true)
-        chunkResults.push(chunkResult)
+      try {
+        for (let i = 0; i < textChunks.length; i++) {
+          const chunkResult = await makeApiRequest(textChunks[i], true)
+          chunkResults.push(chunkResult)
+        }
+      } catch (chunkError) {
+        // Если ошибка произошла при обработке чанка, пробрасываем её дальше
+        throw chunkError
       }
 
       // Объединяем результаты в зависимости от типа действия
@@ -279,9 +312,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('AI Process error:', error)
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Произошла неизвестная ошибка при обработке запроса'
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
