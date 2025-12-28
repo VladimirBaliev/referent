@@ -337,26 +337,26 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-6 sm:py-8 lg:py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 sm:p-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-2">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 sm:p-6 lg:p-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white mb-2">
             Я изучаю Next.js
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-6 sm:mb-8">
             Анализ англоязычных статей с помощью AI
           </p>
 
           {/* Поле ввода URL */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
+          <div className="mb-4 sm:mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-2">
               <label htmlFor="article-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 URL англоязычной статьи
               </label>
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors self-start sm:self-auto"
                 title="Очистить все"
               >
                 Очистить
@@ -424,32 +424,32 @@ export default function Home() {
                 }
               }}
               placeholder="Введите URL статьи, например: https://example.com/article"
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
+              className={`w-full px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm sm:text-base ${
                 urlError
                   ? 'border-red-500 dark:border-red-500 focus:ring-red-500'
                   : 'border-gray-300 dark:border-gray-600'
               }`}
             />
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 break-words">
               Укажите ссылку на англоязычную статью
             </p>
             {urlError && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                <span>⚠️</span>
-                {urlError}
+              <p className="mt-2 text-xs sm:text-sm text-red-600 dark:text-red-400 flex items-start gap-1 break-words">
+                <span className="flex-shrink-0">⚠️</span>
+                <span>{urlError}</span>
               </p>
             )}
           </div>
 
           {/* Блок ошибки парсинга */}
           {parseError && (
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6">
               <Alert variant="destructive">
-                <AlertTitle className="flex items-center gap-2">
+                <AlertTitle className="flex items-center gap-2 text-sm sm:text-base">
                   <span>⚠️</span>
                   Ошибка загрузки статьи
                 </AlertTitle>
-                <AlertDescription className="mt-2">
+                <AlertDescription className="mt-2 text-xs sm:text-sm break-words">
                   {parseError.message}
                 </AlertDescription>
               </Alert>
@@ -457,7 +457,7 @@ export default function Home() {
           )}
 
           {/* Кнопки действий */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
             {(['summary', 'thesis', 'telegram'] as const).map((action) => {
               const cacheKey = parsedArticle ? `${parsedArticle.title}_${action}` : ''
               const isCached = cacheKey && resultsCache[cacheKey]
@@ -495,7 +495,7 @@ export default function Home() {
                     handleAction(action)
                   }}
                   disabled={loading || !parsedArticle || !isReady}
-                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 relative ${
+                  className={`w-full px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition-all duration-200 relative text-sm sm:text-base ${
                     activeAction === action
                       ? `${buttonColors[action].active} text-white shadow-lg`
                       : `${buttonColors[action].inactive} text-white ${buttonColors[action].hover}`
@@ -516,10 +516,10 @@ export default function Home() {
 
           {/* Блок статуса текущего процесса */}
           {(loading || activeAction) && (
-            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
-                <span className="text-sm font-medium">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400 flex-shrink-0"></div>
+                <span className="text-xs sm:text-sm font-medium break-words">
                   {loading && !activeAction && 'Загружаю статью...'}
                   {activeAction === 'summary' && 'Генерирую резюме статьи...'}
                   {activeAction === 'thesis' && 'Извлекаю тезисы...'}
@@ -530,16 +530,16 @@ export default function Home() {
           )}
 
           {/* Блок для отображения результата */}
-          <div className="mt-8" ref={resultRef}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <div className="mt-6 sm:mt-8" ref={resultRef}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
                 Результат
               </h2>
               {result && !result.startsWith('Ошибка:') && (
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="text-sm px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-2"
+                  className="text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors flex items-center justify-center gap-1.5 sm:gap-2 self-start sm:self-auto"
                   title="Копировать результат"
                 >
                   {copied ? (
@@ -556,11 +556,11 @@ export default function Home() {
                 </button>
               )}
             </div>
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 min-h-[200px] border border-gray-200 dark:border-gray-700">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 sm:p-6 min-h-[200px] border border-gray-200 dark:border-gray-700">
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                  <span className="mt-4 text-gray-600 dark:text-gray-400">
+                <div className="flex flex-col items-center justify-center py-6 sm:py-8">
+                  <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-blue-500"></div>
+                  <span className="mt-4 text-sm sm:text-base text-gray-600 dark:text-gray-400 text-center px-4">
                     {activeAction === 'summary' && 'Генерация резюме...'}
                     {activeAction === 'thesis' && 'Извлечение тезисов...'}
                     {activeAction === 'telegram' && 'Создание поста для Telegram...'}
@@ -571,24 +571,24 @@ export default function Home() {
                 <div className="max-w-none">
                   {result.startsWith('Ошибка:') ? (
                     <Alert variant="destructive">
-                      <AlertTitle className="flex items-center gap-2">
+                      <AlertTitle className="flex items-center gap-2 text-sm sm:text-base">
                         <span>⚠️</span>
                         Произошла ошибка
                       </AlertTitle>
-                      <AlertDescription className="mt-2">
+                      <AlertDescription className="mt-2 text-xs sm:text-sm break-words">
                         {result.replace('Ошибка: ', '')}
                       </AlertDescription>
                     </Alert>
                   ) : (
                     <div className="prose dark:prose-invert max-w-none">
-                      <div className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 text-base leading-relaxed bg-white dark:bg-gray-800 p-4 rounded border overflow-auto">
+                      <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed bg-white dark:bg-gray-800 p-3 sm:p-4 rounded border overflow-auto">
                         {result}
                       </div>
                     </div>
                   )}
                 </div>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+                <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 text-center py-6 sm:py-8 px-4">
                   {!parsedArticle 
                     ? 'Нажмите "Парсить статью" для извлечения данных из статьи'
                     : 'Выберите действие для обработки статьи'}
