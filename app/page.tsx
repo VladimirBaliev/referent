@@ -317,13 +317,16 @@ export default function Home() {
                   }
                 }
               }}
-              placeholder="https://example.com/article"
+              placeholder="Введите URL статьи, например: https://example.com/article"
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
                 urlError
                   ? 'border-red-500 dark:border-red-500 focus:ring-red-500'
                   : 'border-gray-300 dark:border-gray-600'
               }`}
             />
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Укажите ссылку на англоязычную статью
+            </p>
             {urlError && (
               <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
                 <span>⚠️</span>
@@ -331,14 +334,6 @@ export default function Home() {
               </p>
             )}
           </div>
-
-          {/* Индикатор загрузки парсинга */}
-          {loading && !activeAction && (
-            <div className="mb-6 flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
-              <span className="text-sm font-medium">Парсинг и перевод статьи...</span>
-            </div>
-          )}
 
           {/* Кнопки действий */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -356,10 +351,17 @@ export default function Home() {
                 telegram: { active: 'bg-purple-600', inactive: 'bg-purple-500', hover: 'hover:bg-purple-600' }
               }
 
+              const buttonTitles = {
+                summary: 'Получить краткое описание статьи',
+                thesis: 'Извлечь основные тезисы из статьи',
+                telegram: 'Создать пост для Telegram на основе статьи'
+              }
+
               return (
                 <button
                   key={action}
                   type="button"
+                  title={buttonTitles[action]}
                   onMouseDown={(e) => {
                     // Устанавливаем флаг перед кликом, чтобы предотвратить onBlur
                     setIsButtonClick(true)
@@ -390,6 +392,21 @@ export default function Home() {
               )
             })}
           </div>
+
+          {/* Блок статуса текущего процесса */}
+          {(loading || activeAction) && (
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                <span className="text-sm font-medium">
+                  {loading && !activeAction && 'Загружаю статью...'}
+                  {activeAction === 'summary' && 'Генерирую резюме статьи...'}
+                  {activeAction === 'thesis' && 'Извлекаю тезисы...'}
+                  {activeAction === 'telegram' && 'Создаю пост для Telegram...'}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Блок для отображения результата */}
           <div className="mt-8">
