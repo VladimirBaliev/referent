@@ -3,45 +3,46 @@
 @tailwind utilities;
 
 /* Кастомные стили для скроллбара */
-@layer utilities {
-  .scrollable-result {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(156 163 175) rgb(229 231 235);
-  }
-  
-  .scrollable-result::-webkit-scrollbar {
-    width: 8px;
-  }
-  
-  .scrollable-result::-webkit-scrollbar-track {
-    background: rgb(229 231 235);
-    border-radius: 4px;
-  }
-  
-  .scrollable-result::-webkit-scrollbar-thumb {
-    background: rgb(156 163 175);
-    border-radius: 4px;
-  }
-  
-  .scrollable-result::-webkit-scrollbar-thumb:hover {
-    background: rgb(107 114 128);
-  }
-  
-  .dark .scrollable-result {
-    scrollbar-color: rgb(75 85 99) rgb(55 65 81);
-  }
-  
-  .dark .scrollable-result::-webkit-scrollbar-track {
-    background: rgb(55 65 81);
-  }
-  
-  .dark .scrollable-result::-webkit-scrollbar-thumb {
-    background: rgb(75 85 99);
-  }
-  
-  .dark .scrollable-result::-webkit-scrollbar-thumb:hover {
-    background: rgb(107 114 128);
-  }
+.scrollable-result {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #e5e7eb;
+}
+
+.scrollable-result::-webkit-scrollbar {
+  width: 12px;
+}
+
+.scrollable-result::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-left: 1px solid #d1d5db;
+}
+
+.scrollable-result::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+}
+
+.scrollable-result::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.dark .scrollable-result {
+  scrollbar-color: #4b5563 #374151;
+}
+
+.dark .scrollable-result::-webkit-scrollbar-track {
+  background: #374151;
+  border-left: 1px solid #4b5563;
+}
+
+.dark .scrollable-result::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border: 2px solid #374151;
+}
+
+.dark .scrollable-result::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
 
 
