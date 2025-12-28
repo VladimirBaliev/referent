@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 type ActionType = 'summary' | 'thesis' | 'telegram' | null
 
@@ -25,6 +26,8 @@ export default function Home() {
   const [resultsCache, setResultsCache] = useState<Record<string, CachedResult>>({})
   // Состояние для ошибки валидации URL
   const [urlError, setUrlError] = useState<string>('')
+  // Состояние для ошибки парсинга
+  const [parseError, setParseError] = useState<{ message: string; type?: string } | null>(null)
   // Отдельное состояние для переведенного текста
   const [translatedText, setTranslatedText] = useState<string>('')
   // Состояние для отслеживания завершения парсинга и перевода
@@ -79,6 +82,7 @@ export default function Home() {
     setTranslatedText('') // Очищаем переведенный текст
     setIsReady(false) // Статья еще не готова
     setUrlError('')
+    setParseError(null) // Очищаем ошибки парсинга
     // Очищаем кэш при парсинге новой статьи
     setResultsCache({})
     setParsedArticle(null)
@@ -93,8 +97,14 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Ошибка при парсинге статьи')
+        const errorData = await response.json()
+        // Используем дружественное сообщение от сервера или стандартное
+        const errorMessage = errorData.error || 'Не удалось загрузить статью по этой ссылке.'
+        setParseError({ message: errorMessage, type: errorData.errorType || 'parse' })
+        setResult('')
+        setIsReady(false)
+        setLoading(false)
+        return
       }
 
       const data = await response.json()
@@ -146,7 +156,11 @@ export default function Home() {
         
         if (isRateLimitError) {
           // Для ошибки лимита показываем только сообщение, без оригинального текста
-          setResult(`⚠️ Ошибка: ${errorMessage}\n\nПожалуйста, подождите немного и попробуйте снова.`)
+          setResult('')
+          setParseError({ 
+            message: 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.', 
+            type: 'rate_limit' 
+          })
         } else {
           // Для других ошибок показываем оригинальный текст с сообщением
           const originalText = `Заголовок: ${data.title}\n\n${data.content}`
@@ -159,9 +173,23 @@ export default function Home() {
         setIsReady(true)
       }
     } catch (error) {
-      setResult(JSON.stringify({
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-      }, null, 2))
+      // Обработка сетевых ошибок и других исключений
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
+      
+      // Определяем тип ошибки
+      let errorType = 'unknown'
+      if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+        errorType = 'network'
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('таймаут')) {
+        errorType = 'timeout'
+      }
+      
+      setParseError({ 
+        message: 'Не удалось загрузить статью по этой ссылке.', 
+        type: errorType 
+      })
+      setResult('')
+      setIsReady(false)
     } finally {
       setLoading(false)
     }
@@ -302,6 +330,7 @@ export default function Home() {
                   setTranslatedText('')
                   setResultsCache({})
                   setActiveAction(null)
+                  setParseError(null)
                 }
               }}
               onBlur={(e) => {
@@ -360,6 +389,21 @@ export default function Home() {
               </p>
             )}
           </div>
+
+          {/* Блок ошибки парсинга */}
+          {parseError && (
+            <div className="mb-6">
+              <Alert variant="destructive">
+                <AlertTitle className="flex items-center gap-2">
+                  <span>⚠️</span>
+                  Ошибка загрузки статьи
+                </AlertTitle>
+                <AlertDescription className="mt-2">
+                  {parseError.message}
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
 
           {/* Кнопки действий */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -453,15 +497,15 @@ export default function Home() {
               ) : result ? (
                 <div className="max-w-none">
                   {result.startsWith('Ошибка:') ? (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                      <div className="flex items-start gap-2">
-                        <span className="text-red-600 dark:text-red-400 text-xl">⚠️</span>
-                        <div className="flex-1">
-                          <p className="text-red-800 dark:text-red-200 font-medium mb-1">Произошла ошибка</p>
-                          <p className="text-red-700 dark:text-red-300 text-sm">{result.replace('Ошибка: ', '')}</p>
-                        </div>
-                      </div>
-                    </div>
+                    <Alert variant="destructive">
+                      <AlertTitle className="flex items-center gap-2">
+                        <span>⚠️</span>
+                        Произошла ошибка
+                      </AlertTitle>
+                      <AlertDescription className="mt-2">
+                        {result.replace('Ошибка: ', '')}
+                      </AlertDescription>
+                    </Alert>
                   ) : (
                     <div className="prose dark:prose-invert max-w-none">
                       <div className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 text-base leading-relaxed bg-white dark:bg-gray-800 p-4 rounded border overflow-auto">
