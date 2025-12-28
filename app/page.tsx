@@ -581,7 +581,7 @@ export default function Home() {
                     </Alert>
                   ) : (
                     <div className="prose dark:prose-invert max-w-none">
-                      <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed bg-white dark:bg-gray-800 p-3 sm:p-4 rounded border overflow-auto">
+                      <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed bg-white dark:bg-gray-800 p-3 sm:p-4 rounded border overflow-y-auto max-h-[600px] scrollable-result">
                         {result}
                       </div>
                     </div>
