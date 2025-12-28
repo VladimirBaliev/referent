@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 type ActionType = 'summary' | 'thesis' | 'telegram' | null
@@ -34,6 +34,10 @@ export default function Home() {
   const [isReady, setIsReady] = useState(false)
   // Флаг для предотвращения срабатывания onBlur при клике на кнопки
   const [isButtonClick, setIsButtonClick] = useState(false)
+  // Состояние для уведомления о копировании
+  const [copied, setCopied] = useState(false)
+  // Ref для блока результатов для автоматической прокрутки
+  const resultRef = useRef<HTMLDivElement>(null)
 
   // Функция для создания уникального ключа кэша
   const getCacheKey = (article: ParsedArticle, action: ActionType): string => {
@@ -41,6 +45,43 @@ export default function Home() {
     const contentHash = article.content.substring(0, 100).replace(/\s+/g, ' ').trim()
     return `${url}_${article.title}_${contentHash}_${action}`
   }
+
+  // Функция для полной очистки всех состояний
+  const handleClear = () => {
+    setUrl('')
+    setResult('')
+    setParsedArticle(null)
+    setTranslatedText('')
+    setResultsCache({})
+    setActiveAction(null)
+    setUrlError('')
+    setParseError(null)
+    setIsReady(false)
+    setCopied(false)
+  }
+
+  // Функция для копирования результата в буфер обмена
+  const handleCopy = async () => {
+    if (!result) return
+    
+    try {
+      await navigator.clipboard.writeText(result)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Ошибка при копировании:', err)
+    }
+  }
+
+  // Автоматическая прокрутка к результатам после успешной генерации
+  useEffect(() => {
+    if (result && !loading && !result.startsWith('Ошибка:')) {
+      // Небольшая задержка для завершения рендеринга
+      setTimeout(() => {
+        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [result, loading])
 
   const handleParse = async () => {
     // Предотвращаем повторный вызов, если уже выполняется парсинг
@@ -308,9 +349,19 @@ export default function Home() {
 
           {/* Поле ввода URL */}
           <div className="mb-6">
-            <label htmlFor="article-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              URL англоязычной статьи
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="article-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                URL англоязычной статьи
+              </label>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Очистить все"
+              >
+                Очистить
+              </button>
+            </div>
             <input
               id="article-url"
               type="url"
@@ -479,10 +530,32 @@ export default function Home() {
           )}
 
           {/* Блок для отображения результата */}
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              Результат
-            </h2>
+          <div className="mt-8" ref={resultRef}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Результат
+              </h2>
+              {result && !result.startsWith('Ошибка:') && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="text-sm px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-2"
+                  title="Копировать результат"
+                >
+                  {copied ? (
+                    <>
+                      <span>✓</span>
+                      <span>Скопировано</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📋</span>
+                      <span>Копировать</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 min-h-[200px] border border-gray-200 dark:border-gray-700">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-8">
