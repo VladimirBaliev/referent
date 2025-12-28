@@ -581,13 +581,19 @@ export default function Home() {
                     </Alert>
                   ) : (
                     <div className="prose dark:prose-invert max-w-none">
-                      <div className="bg-white dark:bg-gray-800 rounded border overflow-hidden">
-                        <div className={`whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4 ${
-                          activeAction === null && translatedText ? 'overflow-y-auto max-h-[600px] scrollable-result' : ''
-                        }`}>
-                          {result}
+                      {activeAction === null && translatedText && translatedText.trim().length > 0 ? (
+                        <div className="bg-white dark:bg-gray-800 rounded border">
+                          <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4 overflow-y-auto max-h-[600px] scrollable-result">
+                            {result}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="bg-white dark:bg-gray-800 rounded border">
+                          <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4">
+                            {result}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
