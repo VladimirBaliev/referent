@@ -11,69 +11,103 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = process.env.HUGGINGFACE_API_KEY
+    // Проверяем переменную окружения (пробуем разные варианты названий)
+    const apiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_API_KEY
 
     if (!apiKey) {
       console.error('HUGGINGFACE_API_KEY is not configured')
+      console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('HUGGING') || key.includes('HF')))
       return NextResponse.json(
-        { error: 'API ключ Hugging Face не настроен. Обратитесь к администратору.' },
+        { error: 'API ключ Hugging Face не настроен. Убедитесь, что в файле .env.local есть переменная HUGGINGFACE_API_KEY и перезапустите сервер разработки.' },
         { status: 500 }
       )
     }
 
     // Используем модель Stable Diffusion через Hugging Face Inference API
-    const model = 'stabilityai/stable-diffusion-xl-base-1.0'
-    const apiUrl = `https://api-inference.huggingface.co/models/${model}`
+    // Пробуем несколько моделей по очереди, если одна недоступна
+    const models = [
+      'runwayml/stable-diffusion-v1-5',
+      'stabilityai/stable-diffusion-2-1',
+      'CompVis/stable-diffusion-v1-4'
+    ]
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        inputs: prompt,
-        parameters: {
-          num_inference_steps: 50,
-          guidance_scale: 7.5,
-          width: 1024,
-          height: 1024
+    let lastError: any = null
+    let imageBlob: Blob | null = null
+
+    // Пробуем каждую модель по очереди
+    for (const model of models) {
+      try {
+        const apiUrl = `https://api-inference.huggingface.co/models/${model}`
+        
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            inputs: prompt
+          })
+        })
+
+        if (response.ok) {
+          imageBlob = await response.blob()
+          break // Успешно получили изображение
+        } else if (response.status === 503) {
+          // Модель загружается, пробуем следующую
+          console.log(`Model ${model} is loading, trying next...`)
+          continue
+        } else if (response.status === 410) {
+          // Модель больше недоступна, пробуем следующую
+          console.log(`Model ${model} is gone, trying next...`)
+          continue
+        } else {
+          // Другая ошибка, сохраняем для последнего сообщения
+          const errorText = await response.text()
+          lastError = {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+            model
+          }
+          continue
         }
-      })
-    })
+      } catch (error) {
+        console.error(`Error with model ${model}:`, error)
+        lastError = error
+        continue
+      }
+    }
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Hugging Face API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData
-      })
+    // Если ни одна модель не сработала
+    if (!imageBlob) {
+      console.error('All models failed. Last error:', lastError)
       
-      let errorMessage = 'Ошибка при генерации изображения'
-      if (response.status === 429) {
-        errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
-      } else if (response.status === 401) {
-        errorMessage = 'Ошибка аутентификации API. Проверьте настройки API ключа Hugging Face.'
-      } else if (response.status === 403) {
-        errorMessage = 'Доступ запрещен. Проверьте права доступа API ключа.'
-      } else if (response.status === 503) {
-        errorMessage = 'Модель загружается. Пожалуйста, подождите немного и попробуйте снова.'
-      } else if (response.status >= 500) {
-        errorMessage = 'Сервис генерации изображений временно недоступен. Попробуйте позже.'
-      } else {
-        errorMessage = `Ошибка API: ${response.statusText || 'Неизвестная ошибка'}`
+      let errorMessage = 'Не удалось сгенерировать изображение. Все модели недоступны.'
+      if (lastError) {
+        if (lastError.status === 429) {
+          errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
+        } else if (lastError.status === 401) {
+          errorMessage = 'Ошибка аутентификации API. Проверьте настройки API ключа Hugging Face.'
+        } else if (lastError.status === 403) {
+          errorMessage = 'Доступ запрещен. Проверьте права доступа API ключа.'
+        } else if (lastError.status === 503) {
+          errorMessage = 'Модели загружаются. Пожалуйста, подождите немного и попробуйте снова.'
+        } else if (lastError.status === 410) {
+          errorMessage = 'Модели больше недоступны. Попробуйте позже или используйте другой сервис генерации изображений.'
+        } else if (lastError.status >= 500) {
+          errorMessage = 'Сервис генерации изображений временно недоступен. Попробуйте позже.'
+        } else {
+          errorMessage = `Ошибка API: ${lastError.statusText || 'Неизвестная ошибка'}`
+        }
       }
       
       return NextResponse.json(
         { error: errorMessage },
-        { status: response.status }
+        { status: lastError?.status || 500 }
       )
     }
 
-    // Получаем изображение в формате blob
-    const imageBlob = await response.blob()
-    
     // Конвертируем blob в base64 для передачи на клиент
     const arrayBuffer = await imageBlob.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
