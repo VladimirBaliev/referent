@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
-type ActionType = 'summary' | 'thesis' | 'telegram' | null
+type ActionType = 'summary' | 'thesis' | 'telegram' | 'illustration' | null
 
 interface ParsedArticle {
   date: string | null
@@ -36,6 +36,8 @@ export default function Home() {
   const [isButtonClick, setIsButtonClick] = useState(false)
   // Состояние для уведомления о копировании
   const [copied, setCopied] = useState(false)
+  // Состояние для изображения
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
   // Ref для блока результатов для автоматической прокрутки
   const resultRef = useRef<HTMLDivElement>(null)
 
@@ -58,6 +60,7 @@ export default function Home() {
     setParseError(null)
     setIsReady(false)
     setCopied(false)
+    setImageUrl(null)
   }
 
   // Функция для копирования результата в буфер обмена
@@ -265,6 +268,69 @@ export default function Home() {
       return
     }
 
+    // Специальная обработка для генерации изображения
+    if (action === 'illustration') {
+      setActiveAction(action)
+      setResult('')
+      setImageUrl(null)
+      setLoading(true)
+
+      try {
+        // Формируем текст для генерации промпта (заголовок + контент)
+        const textToProcess = `Title: ${parsedArticle.title}\n\n${parsedArticle.content}`
+
+        // Шаг 1: Генерируем промпт для изображения
+        const promptResponse = await fetch('/api/generate-image-prompt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: textToProcess }),
+        })
+
+        if (!promptResponse.ok) {
+          const error = await promptResponse.json()
+          throw new Error(error.error || 'Ошибка при генерации промпта для изображения')
+        }
+
+        const promptData = await promptResponse.json()
+        const imagePrompt = promptData.prompt
+
+        if (!imagePrompt) {
+          throw new Error('Не удалось сгенерировать промпт для изображения')
+        }
+
+        // Шаг 2: Генерируем изображение
+        const imageResponse = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt: imagePrompt }),
+        })
+
+        if (!imageResponse.ok) {
+          const error = await imageResponse.json()
+          throw new Error(error.error || 'Ошибка при генерации изображения')
+        }
+
+        const imageData = await imageResponse.json()
+        
+        if (imageData.image) {
+          setImageUrl(imageData.image)
+          setResult(`Промпт для изображения:\n${imagePrompt}`)
+        } else {
+          throw new Error('Изображение не получено от API')
+        }
+      } catch (error) {
+        setResult(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+        setImageUrl(null)
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     // Проверяем кэш - если результат уже есть, показываем его без запроса
     const cacheKey = getCacheKey(parsedArticle, action)
     const cachedResult = resultsCache[cacheKey]
@@ -272,6 +338,7 @@ export default function Home() {
     if (cachedResult) {
       setActiveAction(action)
       setResult(cachedResult.result)
+      setImageUrl(null)
       return
     }
 
@@ -280,6 +347,7 @@ export default function Home() {
     // Устанавливаем activeAction синхронно перед loading, чтобы индикатор парсинга не показывался
     setActiveAction(action)
     setResult('')
+    setImageUrl(null)
     setLoading(true)
 
     try {
@@ -457,25 +525,28 @@ export default function Home() {
           )}
 
           {/* Кнопки действий */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
-            {(['summary', 'thesis', 'telegram'] as const).map((action) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+            {(['summary', 'thesis', 'telegram', 'illustration'] as const).map((action) => {
               const cacheKey = parsedArticle ? `${parsedArticle.title}_${action}` : ''
               const isCached = cacheKey && resultsCache[cacheKey]
               const buttonLabels = {
                 summary: 'О чем статья?',
                 thesis: 'Тезисы',
-                telegram: 'Пост для Telegram'
+                telegram: 'Пост для Telegram',
+                illustration: 'Иллюстрация'
               }
               const buttonColors = {
                 summary: { active: 'bg-blue-600', inactive: 'bg-blue-500', hover: 'hover:bg-blue-600' },
                 thesis: { active: 'bg-green-600', inactive: 'bg-green-500', hover: 'hover:bg-green-600' },
-                telegram: { active: 'bg-purple-600', inactive: 'bg-purple-500', hover: 'hover:bg-purple-600' }
+                telegram: { active: 'bg-purple-600', inactive: 'bg-purple-500', hover: 'hover:bg-purple-600' },
+                illustration: { active: 'bg-orange-600', inactive: 'bg-orange-500', hover: 'hover:bg-orange-600' }
               }
 
               const buttonTitles = {
                 summary: 'Получить краткое описание статьи',
                 thesis: 'Извлечь основные тезисы из статьи',
-                telegram: 'Создать пост для Telegram на основе статьи'
+                telegram: 'Создать пост для Telegram на основе статьи',
+                illustration: 'Сгенерировать иллюстрацию для статьи'
               }
 
               return (
@@ -524,6 +595,7 @@ export default function Home() {
                   {activeAction === 'summary' && 'Генерирую резюме статьи...'}
                   {activeAction === 'thesis' && 'Извлекаю тезисы...'}
                   {activeAction === 'telegram' && 'Создаю пост для Telegram...'}
+                  {activeAction === 'illustration' && 'Генерирую иллюстрацию...'}
                 </span>
               </div>
             </div>
@@ -535,7 +607,7 @@ export default function Home() {
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
                 Результат
               </h2>
-              {result && !result.startsWith('Ошибка:') && (
+              {result && !result.startsWith('Ошибка:') && activeAction !== 'illustration' && (
                 <button
                   type="button"
                   onClick={handleCopy}
@@ -564,6 +636,7 @@ export default function Home() {
                     {activeAction === 'summary' && 'Генерация резюме...'}
                     {activeAction === 'thesis' && 'Извлечение тезисов...'}
                     {activeAction === 'telegram' && 'Создание поста для Telegram...'}
+                    {activeAction === 'illustration' && 'Генерация иллюстрации...'}
                     {!activeAction && 'Обработка...'}
                   </span>
                 </div>
@@ -580,18 +653,39 @@ export default function Home() {
                       </AlertDescription>
                     </Alert>
                   ) : (
-                    <div className="prose dark:prose-invert max-w-none">
-                      {activeAction === null && translatedText && translatedText.trim().length > 0 ? (
-                        <div className="bg-white dark:bg-gray-800 rounded">
-                          <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4 overflow-y-auto max-h-[600px] scrollable-result">
-                            {result}
+                    <div className="max-w-none">
+                      {activeAction === 'illustration' && imageUrl ? (
+                        <div className="space-y-4">
+                          <div className="bg-white dark:bg-gray-800 rounded p-3 sm:p-4">
+                            <img 
+                              src={imageUrl} 
+                              alt="Сгенерированная иллюстрация" 
+                              className="w-full h-auto rounded-lg shadow-lg max-w-2xl mx-auto"
+                            />
                           </div>
+                          {result && !result.startsWith('Ошибка:') && (
+                            <div className="bg-white dark:bg-gray-800 rounded p-3 sm:p-4">
+                              <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-xs sm:text-sm leading-relaxed">
+                                {result}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
-                        <div className="bg-white dark:bg-gray-800 rounded">
-                          <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4">
-                            {result}
-                          </div>
+                        <div className="prose dark:prose-invert max-w-none">
+                          {activeAction === null && translatedText && translatedText.trim().length > 0 ? (
+                            <div className="bg-white dark:bg-gray-800 rounded">
+                              <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4 overflow-y-auto max-h-[600px] scrollable-result">
+                                {result}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-white dark:bg-gray-800 rounded">
+                              <div className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 text-sm sm:text-base leading-relaxed p-3 sm:p-4">
+                                {result}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
