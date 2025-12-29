@@ -327,6 +327,7 @@ export default function Home() {
         setImageUrl(null)
       } finally {
         setLoading(false)
+        setActiveAction(null)
       }
       return
     }
@@ -336,7 +337,7 @@ export default function Home() {
     const cachedResult = resultsCache[cacheKey]
     
     if (cachedResult) {
-      setActiveAction(action)
+      setActiveAction(null) // Не устанавливаем activeAction для кэша, так как загрузки нет
       setResult(cachedResult.result)
       setImageUrl(null)
       return
@@ -401,6 +402,7 @@ export default function Home() {
       setResult(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
     } finally {
       setLoading(false)
+      setActiveAction(null)
     }
   }
 
