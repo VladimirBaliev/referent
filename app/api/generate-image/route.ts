@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt } = await request.json()
-    
-    console.log('Generate image request received, prompt length:', prompt?.length || 0)
+    let prompt: string
+    try {
+      const body = await request.json()
+      prompt = body.prompt
+      console.log('Generate image request received, prompt length:', prompt?.length || 0)
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError)
+      return NextResponse.json(
+        { error: 'Не удалось прочитать данные запроса. Убедитесь, что отправлен корректный JSON.' },
+        { status: 400 }
+      )
+    }
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json(
@@ -174,8 +183,15 @@ export async function POST(request: NextRequest) {
     // Если ни одна модель не сработала
     if (!imageBlob) {
       console.error('All models failed. Last error:', lastError)
+      console.error('Attempted models:', attemptedModels)
       
-      let errorMessage = `Не удалось сгенерировать изображение. Протестированы модели: ${attemptedModels.join(', ')}.`
+      let errorMessage = `Не удалось сгенерировать изображение.`
+      if (attemptedModels.length > 0) {
+        errorMessage += ` Протестированы модели: ${attemptedModels.join(', ')}.`
+      } else {
+        errorMessage += ' Модели не были протестированы.'
+      }
+      
       if (lastError) {
         if (lastError.status === 429) {
           errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
