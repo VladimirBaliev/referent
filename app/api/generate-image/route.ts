@@ -24,18 +24,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Используем модели для генерации изображений через Hugging Face Inference API
-    // Приоритет: сначала проверенные Stable Diffusion модели, затем DeepSeek
-    // Пробуем несколько моделей по очереди, если одна недоступна
+    // Приоритет: проверенные Stable Diffusion модели
+    // Модель DeepSeek Janus-Pro-7B может требовать специальной настройки или недоступна через стандартный API
     const models = [
       'runwayml/stable-diffusion-v1-5', // Надежная модель Stable Diffusion
       'stabilityai/stable-diffusion-2-1', // Альтернативная модель Stable Diffusion
       'CompVis/stable-diffusion-v1-4', // Резервная модель Stable Diffusion
-      'deepseek-ai/Janus-Pro-7B' // Модель DeepSeek для генерации изображений (может требовать специальной настройки)
+      // 'deepseek-ai/Janus-Pro-7B' // Временно отключена - может требовать специального формата запроса
     ]
 
     let lastError: any = null
     let imageBlob: Blob | null = null
     let usedModel: string | null = null
+    const attemptedModels: string[] = []
 
     // Пробуем каждую модель по очереди
     for (const model of models) {
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
         const apiUrl = `https://api-inference.huggingface.co/models/${model}`
         
         console.log(`Attempting to generate image with model: ${model}`)
+        attemptedModels.push(model)
         
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -52,14 +54,47 @@ export async function POST(request: NextRequest) {
           },
           body: JSON.stringify({
             inputs: prompt
-          })
+          }),
+          // Увеличиваем таймаут для генерации изображений
+          signal: AbortSignal.timeout(60000) // 60 секунд
         })
 
         if (response.ok) {
-          imageBlob = await response.blob()
-          usedModel = model
-          console.log(`Successfully generated image using model: ${model}`)
-          break // Успешно получили изображение
+          const contentType = response.headers.get('content-type')
+          
+          // Проверяем, что ответ действительно является изображением
+          if (contentType && contentType.startsWith('image/')) {
+            imageBlob = await response.blob()
+            usedModel = model
+            console.log(`Successfully generated image using model: ${model}`)
+            break // Успешно получили изображение
+          } else {
+            // Если ответ не изображение, возможно это JSON с ошибкой
+            const textResponse = await response.text()
+            try {
+              const jsonResponse = JSON.parse(textResponse)
+              if (jsonResponse.error) {
+                console.error(`Model ${model} returned error in response:`, jsonResponse.error)
+                lastError = {
+                  status: response.status,
+                  statusText: response.statusText,
+                  error: jsonResponse.error,
+                  model
+                }
+                continue
+              }
+            } catch {
+              // Не JSON, просто текст ошибки
+              console.error(`Model ${model} returned non-image response:`, textResponse.substring(0, 200))
+              lastError = {
+                status: response.status,
+                statusText: response.statusText,
+                error: `Unexpected content type: ${contentType}`,
+                model
+              }
+              continue
+            }
+          }
         } else if (response.status === 503) {
           // Модель загружается, пробуем следующую
           console.log(`Model ${model} is loading, trying next...`)
@@ -80,9 +115,26 @@ export async function POST(request: NextRequest) {
           }
           continue
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error with model ${model}:`, error)
-        lastError = error
+        // Обрабатываем ошибки таймаута и сети
+        if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+          lastError = {
+            status: 408,
+            statusText: 'Request Timeout',
+            error: 'Превышено время ожидания ответа от модели',
+            model
+          }
+        } else if (error.message) {
+          lastError = {
+            status: 0,
+            statusText: 'Network Error',
+            error: error.message,
+            model
+          }
+        } else {
+          lastError = error
+        }
         continue
       }
     }
@@ -91,7 +143,7 @@ export async function POST(request: NextRequest) {
     if (!imageBlob) {
       console.error('All models failed. Last error:', lastError)
       
-      let errorMessage = 'Не удалось сгенерировать изображение. Все модели недоступны.'
+      let errorMessage = `Не удалось сгенерировать изображение. Протестированы модели: ${attemptedModels.join(', ')}.`
       if (lastError) {
         if (lastError.status === 429) {
           errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
@@ -119,6 +171,7 @@ export async function POST(request: NextRequest) {
           error: errorMessage,
           ...(process.env.NODE_ENV === 'development' && lastError ? {
             details: {
+              attemptedModels: attemptedModels,
               lastModel: lastError.model,
               status: lastError.status,
               statusText: lastError.statusText,
