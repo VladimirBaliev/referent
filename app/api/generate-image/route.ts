@@ -64,21 +64,26 @@ export async function POST(request: NextRequest) {
         const controller = new AbortController()
         timeoutId = setTimeout(() => controller.abort(), 60000) // 60 секунд
         
+        // Для Stable Diffusion используем упрощенный формат запроса
+        const requestBody: any = {
+          inputs: prompt
+        }
+        
+        // Добавляем параметры только если они поддерживаются
+        // wait_for_model может не поддерживаться для всех моделей
+        console.log(`Sending request to ${model} with prompt length: ${prompt.length}`)
+        
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            inputs: prompt,
-            parameters: {
-              wait_for_model: true, // Ждем загрузки модели, если она не загружена
-              return_full_text: false
-            }
-          }),
+          body: JSON.stringify(requestBody),
           signal: controller.signal
         })
+        
+        console.log(`Response status for ${model}: ${response.status} ${response.statusText}`)
         
         if (timeoutId) {
           clearTimeout(timeoutId)
@@ -87,16 +92,40 @@ export async function POST(request: NextRequest) {
 
         if (response.ok) {
           const contentType = response.headers.get('content-type')
+          console.log(`Model ${model} response content-type: ${contentType}`)
           
           // Проверяем, что ответ действительно является изображением
           if (contentType && contentType.startsWith('image/')) {
-            imageBlob = await response.blob()
-            usedModel = model
-            console.log(`Successfully generated image using model: ${model}`)
-            break // Успешно получили изображение
+            try {
+              imageBlob = await response.blob()
+              if (imageBlob && imageBlob.size > 0) {
+                usedModel = model
+                console.log(`Successfully generated image using model: ${model}, size: ${imageBlob.size} bytes`)
+                break // Успешно получили изображение
+              } else {
+                console.error(`Model ${model} returned empty image blob`)
+                lastError = {
+                  status: response.status,
+                  statusText: 'Empty response',
+                  error: 'Received empty image blob',
+                  model
+                }
+                continue
+              }
+            } catch (blobError) {
+              console.error(`Model ${model} failed to read blob:`, blobError)
+              lastError = {
+                status: response.status,
+                statusText: 'Blob read error',
+                error: blobError instanceof Error ? blobError.message : String(blobError),
+                model
+              }
+              continue
+            }
           } else {
             // Если ответ не изображение, возможно это JSON с ошибкой
             const textResponse = await response.text()
+            console.log(`Model ${model} returned non-image response (${contentType}):`, textResponse.substring(0, 300))
             try {
               const jsonResponse = JSON.parse(textResponse)
               if (jsonResponse.error) {
@@ -108,14 +137,24 @@ export async function POST(request: NextRequest) {
                   model
                 }
                 continue
+              } else {
+                // Неожиданный JSON ответ
+                console.error(`Model ${model} returned unexpected JSON:`, JSON.stringify(jsonResponse).substring(0, 300))
+                lastError = {
+                  status: response.status,
+                  statusText: response.statusText,
+                  error: `Unexpected JSON response: ${JSON.stringify(jsonResponse).substring(0, 200)}`,
+                  model
+                }
+                continue
               }
             } catch {
               // Не JSON, просто текст ошибки
-              console.error(`Model ${model} returned non-image response:`, textResponse.substring(0, 200))
+              console.error(`Model ${model} returned non-image, non-JSON response:`, textResponse.substring(0, 200))
               lastError = {
                 status: response.status,
                 statusText: response.statusText,
-                error: `Unexpected content type: ${contentType}`,
+                error: `Unexpected content type: ${contentType}, response: ${textResponse.substring(0, 200)}`,
                 model
               }
               continue
