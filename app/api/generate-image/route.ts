@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
   try {
     const { prompt } = await request.json()
+    
+    console.log('Generate image request received, prompt length:', prompt?.length || 0)
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json(
@@ -22,6 +24,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
+    
+    console.log('API key found, length:', apiKey.length)
 
     // Используем модели для генерации изображений через Hugging Face Inference API
     // Приоритет: проверенные Stable Diffusion модели
@@ -114,8 +118,13 @@ export async function POST(request: NextRequest) {
           continue
         } else {
           // Другая ошибка, сохраняем для последнего сообщения
-          const errorText = await response.text()
-          console.error(`Model ${model} failed with status ${response.status}:`, errorText)
+          let errorText = ''
+          try {
+            errorText = await response.text()
+          } catch (e) {
+            errorText = `Failed to read error response: ${e}`
+          }
+          console.error(`Model ${model} failed with status ${response.status}:`, errorText.substring(0, 500))
           lastError = {
             status: response.status,
             statusText: response.statusText,
@@ -178,20 +187,29 @@ export async function POST(request: NextRequest) {
         }
       }
       
+      // Всегда возвращаем детали ошибки для диагностики
+      const errorDetails: any = {
+        attemptedModels: attemptedModels,
+      }
+      
+      if (lastError) {
+        errorDetails.lastModel = lastError.model
+        errorDetails.status = lastError.status
+        errorDetails.statusText = lastError.statusText
+        
+        if (lastError.error) {
+          if (typeof lastError.error === 'string') {
+            errorDetails.errorPreview = lastError.error.substring(0, 500)
+          } else {
+            errorDetails.errorPreview = JSON.stringify(lastError.error).substring(0, 500)
+          }
+        }
+      }
+      
       return NextResponse.json(
         { 
           error: errorMessage,
-          ...(process.env.NODE_ENV === 'development' && lastError ? {
-            details: {
-              attemptedModels: attemptedModels,
-              lastModel: lastError.model,
-              status: lastError.status,
-              statusText: lastError.statusText,
-              errorPreview: typeof lastError.error === 'string' 
-                ? lastError.error.substring(0, 500) 
-                : lastError.error
-            }
-          } : {})
+          details: errorDetails
         },
         { status: lastError?.status || 500 }
       )
