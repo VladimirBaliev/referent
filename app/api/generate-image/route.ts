@@ -24,13 +24,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Используем модели для генерации изображений через Hugging Face Inference API
-    // Приоритет: сначала модели DeepSeek, затем Stable Diffusion
+    // Приоритет: сначала проверенные Stable Diffusion модели, затем DeepSeek
     // Пробуем несколько моделей по очереди, если одна недоступна
     const models = [
-      'deepseek-ai/Janus-Pro-7B', // Модель DeepSeek для генерации изображений
-      'runwayml/stable-diffusion-v1-5',
-      'stabilityai/stable-diffusion-2-1',
-      'CompVis/stable-diffusion-v1-4'
+      'runwayml/stable-diffusion-v1-5', // Надежная модель Stable Diffusion
+      'stabilityai/stable-diffusion-2-1', // Альтернативная модель Stable Diffusion
+      'CompVis/stable-diffusion-v1-4', // Резервная модель Stable Diffusion
+      'deepseek-ai/Janus-Pro-7B' // Модель DeepSeek для генерации изображений (может требовать специальной настройки)
     ]
 
     let lastError: any = null
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         } else {
           // Другая ошибка, сохраняем для последнего сообщения
           const errorText = await response.text()
+          console.error(`Model ${model} failed with status ${response.status}:`, errorText)
           lastError = {
             status: response.status,
             statusText: response.statusText,
@@ -102,15 +103,31 @@ export async function POST(request: NextRequest) {
           errorMessage = 'Модели загружаются. Пожалуйста, подождите немного и попробуйте снова.'
         } else if (lastError.status === 410) {
           errorMessage = 'Модели больше недоступны. Попробуйте позже или используйте другой сервис генерации изображений.'
+        } else if (lastError.status === 404) {
+          errorMessage = `Модель ${lastError.model || 'неизвестная'} не найдена. Возможно, модель недоступна или требует другого формата запроса.`
         } else if (lastError.status >= 500) {
           errorMessage = 'Сервис генерации изображений временно недоступен. Попробуйте позже.'
         } else {
-          errorMessage = `Ошибка API: ${lastError.statusText || 'Неизвестная ошибка'}`
+          // Показываем более детальную информацию об ошибке
+          const errorDetails = lastError.error ? (typeof lastError.error === 'string' ? lastError.error.substring(0, 200) : JSON.stringify(lastError.error).substring(0, 200)) : ''
+          errorMessage = `Ошибка API (${lastError.status}): ${lastError.statusText || 'Неизвестная ошибка'}${errorDetails ? `. ${errorDetails}` : ''}`
         }
       }
       
       return NextResponse.json(
-        { error: errorMessage },
+        { 
+          error: errorMessage,
+          ...(process.env.NODE_ENV === 'development' && lastError ? {
+            details: {
+              lastModel: lastError.model,
+              status: lastError.status,
+              statusText: lastError.statusText,
+              errorPreview: typeof lastError.error === 'string' 
+                ? lastError.error.substring(0, 500) 
+                : lastError.error
+            }
+          } : {})
+        },
         { status: lastError?.status || 500 }
       )
     }
