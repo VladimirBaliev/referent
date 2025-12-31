@@ -217,6 +217,8 @@ export async function POST(request: NextRequest) {
       // Всегда возвращаем детали ошибки для диагностики
       const errorDetails: any = {
         attemptedModels: attemptedModels,
+        modelsCount: models.length,
+        attemptedCount: attemptedModels.length
       }
       
       if (lastError) {
@@ -231,7 +233,15 @@ export async function POST(request: NextRequest) {
             errorDetails.errorPreview = JSON.stringify(lastError.error).substring(0, 500)
           }
         }
+      } else {
+        errorDetails.note = 'No error details captured - all models may have failed silently'
       }
+      
+      console.error('Returning error response:', {
+        errorMessage,
+        errorDetails,
+        lastError
+      })
       
       return NextResponse.json(
         { 
@@ -266,16 +276,22 @@ export async function POST(request: NextRequest) {
       console.error('Error name:', error.name)
       console.error('Error message:', error.message)
       console.error('Error stack:', error.stack)
+    } else {
+      console.error('Error is not an Error instance:', typeof error, error)
     }
     
+    // Всегда возвращаем детали для диагностики
     return NextResponse.json(
       { 
         error: errorMessage,
         errorType: 'unexpected',
-        ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
-          stack: error.stack,
-          errorName: error.name
-        } : {})
+        details: {
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+            stack: error.stack
+          } : {})
+        }
       },
       { status: 500 }
     )
