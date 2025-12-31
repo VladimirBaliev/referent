@@ -23,9 +23,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Используем модель Stable Diffusion через Hugging Face Inference API
+    // Используем модели для генерации изображений через Hugging Face Inference API
+    // Приоритет: сначала модели DeepSeek, затем Stable Diffusion
     // Пробуем несколько моделей по очереди, если одна недоступна
     const models = [
+      'deepseek-ai/Janus-Pro-7B', // Модель DeepSeek для генерации изображений
       'runwayml/stable-diffusion-v1-5',
       'stabilityai/stable-diffusion-2-1',
       'CompVis/stable-diffusion-v1-4'
@@ -33,11 +35,14 @@ export async function POST(request: NextRequest) {
 
     let lastError: any = null
     let imageBlob: Blob | null = null
+    let usedModel: string | null = null
 
     // Пробуем каждую модель по очереди
     for (const model of models) {
       try {
         const apiUrl = `https://api-inference.huggingface.co/models/${model}`
+        
+        console.log(`Attempting to generate image with model: ${model}`)
         
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -52,6 +57,8 @@ export async function POST(request: NextRequest) {
 
         if (response.ok) {
           imageBlob = await response.blob()
+          usedModel = model
+          console.log(`Successfully generated image using model: ${model}`)
           break // Успешно получили изображение
         } else if (response.status === 503) {
           // Модель загружается, пробуем следующую
@@ -117,7 +124,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       image: dataUrl,
-      mimeType
+      mimeType,
+      model: usedModel // Информация о модели, которая использовалась
     })
 
   } catch (error) {
