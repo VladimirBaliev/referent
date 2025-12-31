@@ -40,11 +40,16 @@ export async function POST(request: NextRequest) {
 
     // Пробуем каждую модель по очереди
     for (const model of models) {
+      let timeoutId: NodeJS.Timeout | null = null
       try {
         const apiUrl = `https://api-inference.huggingface.co/models/${model}`
         
         console.log(`Attempting to generate image with model: ${model}`)
         attemptedModels.push(model)
+        
+        // Создаем AbortController для таймаута
+        const controller = new AbortController()
+        timeoutId = setTimeout(() => controller.abort(), 60000) // 60 секунд
         
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -55,9 +60,13 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             inputs: prompt
           }),
-          // Увеличиваем таймаут для генерации изображений
-          signal: AbortSignal.timeout(60000) // 60 секунд
+          signal: controller.signal
         })
+        
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
 
         if (response.ok) {
           const contentType = response.headers.get('content-type')
@@ -116,6 +125,9 @@ export async function POST(request: NextRequest) {
           continue
         }
       } catch (error: any) {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
         console.error(`Error with model ${model}:`, error)
         // Обрабатываем ошибки таймаута и сети
         if (error.name === 'AbortError' || error.name === 'TimeoutError') {
