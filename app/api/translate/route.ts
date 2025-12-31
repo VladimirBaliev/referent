@@ -52,7 +52,9 @@ export async function POST(request: NextRequest) {
       
       // Обработка различных типов ошибок с понятными сообщениями
       let errorMessage = 'Ошибка при переводе текста'
-      if (response.status === 429) {
+      if (response.status === 402) {
+        errorMessage = 'Недостаточно средств на счету OpenRouter API. Пожалуйста, пополните баланс или проверьте настройки подписки.'
+      } else if (response.status === 429) {
         errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
       } else if (response.status === 401) {
         errorMessage = 'Ошибка аутентификации API. Проверьте настройки API ключа.'
