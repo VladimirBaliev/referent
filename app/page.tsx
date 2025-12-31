@@ -311,7 +311,21 @@ export default function Home() {
 
         if (!imageResponse.ok) {
           const error = await imageResponse.json()
-          throw new Error(error.error || 'Ошибка при генерации изображения')
+          // Показываем детали ошибки, если они есть
+          let errorMessage = error.error || 'Ошибка при генерации изображения'
+          if (error.details) {
+            const details = error.details
+            if (details.errorPreview) {
+              errorMessage += `\n\nДетали: ${details.errorPreview}`
+            }
+            if (details.status) {
+              errorMessage += `\nСтатус: ${details.status}`
+            }
+            if (details.lastModel) {
+              errorMessage += `\nПоследняя модель: ${details.lastModel}`
+            }
+          }
+          throw new Error(errorMessage)
         }
 
         const imageData = await imageResponse.json()

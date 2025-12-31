@@ -62,7 +62,11 @@ export async function POST(request: NextRequest) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            inputs: prompt
+            inputs: prompt,
+            parameters: {
+              wait_for_model: true, // Ждем загрузки модели, если она не загружена
+              return_full_text: false
+            }
           }),
           signal: controller.signal
         })
@@ -110,7 +114,14 @@ export async function POST(request: NextRequest) {
           }
         } else if (response.status === 503) {
           // Модель загружается, пробуем следующую
-          console.log(`Model ${model} is loading, trying next...`)
+          const errorText = await response.text().catch(() => 'Unable to read error')
+          console.log(`Model ${model} is loading (503), trying next... Error: ${errorText.substring(0, 200)}`)
+          lastError = {
+            status: 503,
+            statusText: 'Service Unavailable',
+            error: errorText,
+            model
+          }
           continue
         } else if (response.status === 410) {
           // Модель больше недоступна, пробуем следующую
