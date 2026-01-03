@@ -60,12 +60,13 @@ export async function POST(request: NextRequest) {
         attemptedModels.push(model)
         
         // Используем новый InferenceClient для генерации изображений
-        // textToImage автоматически обрабатывает загрузку модели и возвращает Blob
-        // retry_on_error по умолчанию true, поэтому библиотека автоматически повторит запрос при 503
+        // Указываем провайдер "hf-inference" для прямого доступа к Hugging Face Inference API
+        // Это необходимо, так как не все модели доступны через другие провайдеры
         const imageBlobResult = await hf.textToImage(
           {
             model: model,
             inputs: prompt,
+            provider: 'hf-inference', // Используем прямой доступ к HF Inference API
           },
           {
             outputType: 'blob' as const, // Явно указываем тип возвращаемого значения
@@ -101,7 +102,11 @@ export async function POST(request: NextRequest) {
         }
         
         // Проверяем специфичные ошибки Hugging Face API
-        if (error.message?.includes('503') || error.message?.includes('loading')) {
+        if (error.message?.includes('No Inference Provider available') || error.message?.includes('No provider')) {
+          errorStatus = 503
+          errorStatusText = 'Service Unavailable'
+          errorMessage = `Модель ${model} недоступна через Inference Providers. Попробуйте другую модель или используйте прямой доступ к API.`
+        } else if (error.message?.includes('503') || error.message?.includes('loading')) {
           errorStatus = 503
           errorStatusText = 'Service Unavailable'
           errorMessage = 'Модель загружается. Попробуйте подождать и повторить запрос.'
