@@ -55,22 +55,21 @@ export async function POST(request: NextRequest) {
     for (const model of models) {
       let timeoutId: NodeJS.Timeout | null = null
       try {
-        const apiUrl = `https://api-inference.huggingface.co/models/${model}`
+        // Добавляем параметр wait_for_model для ожидания загрузки модели
+        const apiUrl = `https://api-inference.huggingface.co/models/${model}?wait_for_model=true`
         
         console.log(`Attempting to generate image with model: ${model}`)
         attemptedModels.push(model)
         
         // Создаем AbortController для таймаута
         const controller = new AbortController()
-        timeoutId = setTimeout(() => controller.abort(), 60000) // 60 секунд
+        timeoutId = setTimeout(() => controller.abort(), 120000) // 120 секунд (увеличено для wait_for_model)
         
         // Для Stable Diffusion используем упрощенный формат запроса
         const requestBody: any = {
           inputs: prompt
         }
         
-        // Добавляем параметры только если они поддерживаются
-        // wait_for_model может не поддерживаться для всех моделей
         console.log(`Sending request to ${model} with prompt length: ${prompt.length}`)
         
         const response = await fetch(apiUrl, {
@@ -161,13 +160,58 @@ export async function POST(request: NextRequest) {
             }
           }
         } else if (response.status === 503) {
-          // Модель загружается, пробуем следующую
+          // Модель загружается, даже с wait_for_model=true может быть 503
+          // Пробуем подождать и повторить запрос один раз
           const errorText = await response.text().catch(() => 'Unable to read error')
-          console.log(`Model ${model} is loading (503), trying next... Error: ${errorText.substring(0, 200)}`)
+          console.log(`Model ${model} is loading (503), waiting 5 seconds and retrying... Error: ${errorText.substring(0, 200)}`)
+          
+          // Очищаем текущий таймаут
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = null
+          }
+          
+          // Ждем 5 секунд и пробуем еще раз с новым контроллером
+          await new Promise(resolve => setTimeout(resolve, 5000))
+          
+          try {
+            // Создаем новый контроллер для повторной попытки
+            const retryController = new AbortController()
+            const retryTimeoutId = setTimeout(() => retryController.abort(), 120000)
+            
+            const retryResponse = await fetch(apiUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(requestBody),
+              signal: retryController.signal
+            })
+            
+            if (retryTimeoutId) {
+              clearTimeout(retryTimeoutId)
+            }
+            
+            if (retryResponse.ok) {
+              const contentType = retryResponse.headers.get('content-type')
+              if (contentType && contentType.startsWith('image/')) {
+                imageBlob = await retryResponse.blob()
+                if (imageBlob && imageBlob.size > 0) {
+                  usedModel = model
+                  console.log(`Successfully generated image using model: ${model} after retry, size: ${imageBlob.size} bytes`)
+                  break
+                }
+              }
+            }
+          } catch (retryError) {
+            console.log(`Retry failed for ${model}, trying next model...`)
+          }
+          
           lastError = {
             status: 503,
             statusText: 'Service Unavailable',
-            error: errorText,
+            error: errorText || 'Model is loading, retry failed',
             model
           }
           continue
@@ -233,24 +277,29 @@ export async function POST(request: NextRequest) {
       
       if (lastError) {
         if (lastError.status === 429) {
-          errorMessage = 'Превышен лимит запросов к API. Пожалуйста, подождите немного и попробуйте снова.'
+          errorMessage = 'Превышен лимит запросов к API Hugging Face. Пожалуйста, подождите немного и попробуйте снова.'
         } else if (lastError.status === 401) {
-          errorMessage = 'Ошибка аутентификации API. Проверьте настройки API ключа Hugging Face.'
+          errorMessage = 'Ошибка аутентификации API. Проверьте, что в файле .env.local указан корректный HUGGINGFACE_API_KEY и перезапустите сервер разработки.'
         } else if (lastError.status === 403) {
-          errorMessage = 'Доступ запрещен. Проверьте права доступа API ключа.'
+          errorMessage = 'Доступ запрещен. Проверьте, что ваш API ключ Hugging Face корректен и активен. Получите токен на https://huggingface.co/settings/tokens (тип: Read) и добавьте его в .env.local как HUGGINGFACE_API_KEY.'
         } else if (lastError.status === 503) {
-          errorMessage = 'Модели загружаются. Пожалуйста, подождите немного и попробуйте снова.'
+          errorMessage = 'Модели загружаются на сервере Hugging Face. Это может занять несколько минут при первом использовании. Попробуйте подождать и повторить запрос через 1-2 минуты.'
         } else if (lastError.status === 410) {
-          errorMessage = 'Модели больше недоступны. Попробуйте позже или используйте другой сервис генерации изображений.'
+          errorMessage = 'Модели больше недоступны через Hugging Face API. Попробуйте позже или используйте другой сервис генерации изображений.'
         } else if (lastError.status === 404) {
           errorMessage = `Модель ${lastError.model || 'неизвестная'} не найдена. Возможно, модель недоступна или требует другого формата запроса.`
         } else if (lastError.status >= 500) {
-          errorMessage = 'Сервис генерации изображений временно недоступен. Попробуйте позже.'
+          errorMessage = 'Сервис генерации изображений Hugging Face временно недоступен. Попробуйте позже.'
+        } else if (lastError.status === 0 || lastError.statusText === 'Network Error') {
+          errorMessage = 'Ошибка сети при подключении к Hugging Face API. Проверьте подключение к интернету и попробуйте снова.'
         } else {
           // Показываем более детальную информацию об ошибке
           const errorDetails = lastError.error ? (typeof lastError.error === 'string' ? lastError.error.substring(0, 200) : JSON.stringify(lastError.error).substring(0, 200)) : ''
           errorMessage = `Ошибка API (${lastError.status}): ${lastError.statusText || 'Неизвестная ошибка'}${errorDetails ? `. ${errorDetails}` : ''}`
         }
+      } else {
+        // Если нет информации об ошибке, возможно проблема с конфигурацией
+        errorMessage += ' Возможно, проблема с настройкой API ключа или доступом к сервису.'
       }
       
       // Всегда возвращаем детали ошибки для диагностики

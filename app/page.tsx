@@ -313,18 +313,37 @@ export default function Home() {
           const error = await imageResponse.json()
           // Показываем детали ошибки, если они есть
           let errorMessage = error.error || 'Ошибка при генерации изображения'
+          
+          // Форматируем детали ошибки для лучшего отображения
+          const errorDetails: string[] = []
           if (error.details) {
             const details = error.details
-            if (details.errorPreview) {
-              errorMessage += `\n\nДетали: ${details.errorPreview}`
-            }
             if (details.status) {
-              errorMessage += `\nСтатус: ${details.status}`
+              errorDetails.push(`Статус: ${details.status}`)
+            }
+            if (details.statusText) {
+              errorDetails.push(`Тип ошибки: ${details.statusText}`)
+            }
+            if (details.attemptedModels && details.attemptedModels.length > 0) {
+              errorDetails.push(`Протестированы модели: ${details.attemptedModels.join(', ')}`)
             }
             if (details.lastModel) {
-              errorMessage += `\nПоследняя модель: ${details.lastModel}`
+              errorDetails.push(`Последняя попытка: ${details.lastModel}`)
+            }
+            if (details.errorPreview) {
+              const preview = typeof details.errorPreview === 'string' 
+                ? details.errorPreview.substring(0, 300)
+                : String(details.errorPreview).substring(0, 300)
+              if (preview) {
+                errorDetails.push(`Детали: ${preview}`)
+              }
             }
           }
+          
+          if (errorDetails.length > 0) {
+            errorMessage += '\n\n' + errorDetails.join('\n')
+          }
+          
           throw new Error(errorMessage)
         }
 
