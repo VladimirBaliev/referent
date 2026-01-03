@@ -61,19 +61,19 @@ export async function POST(request: NextRequest) {
         
         // Используем новый InferenceClient для генерации изображений
         // textToImage автоматически обрабатывает загрузку модели и возвращает Blob
+        // retry_on_error по умолчанию true, поэтому библиотека автоматически повторит запрос при 503
         const imageBlobResult = await hf.textToImage(
           {
             model: model,
             inputs: prompt,
           },
           {
-            outputType: 'blob', // Явно указываем, что хотим получить Blob
-            wait_for_model: true, // Ждем загрузки модели
+            outputType: 'blob' as const, // Явно указываем тип возвращаемого значения
           }
         )
         
         // textToImage возвращает Blob напрямую
-        if (imageBlobResult && imageBlobResult instanceof Blob && imageBlobResult.size > 0) {
+        if (imageBlobResult && imageBlobResult.size > 0) {
           imageBlob = imageBlobResult
           usedModel = model
           console.log(`Successfully generated image using model: ${model}, size: ${imageBlob.size} bytes`)
