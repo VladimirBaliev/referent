@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { HfInference } from '@huggingface/inference'
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,14 +37,15 @@ export async function POST(request: NextRequest) {
     
     console.log('API key found, length:', apiKey.length)
 
+    // Создаем InferenceClient с новым API
+    const hf = new HfInference(apiKey)
+
     // Используем модели для генерации изображений через Hugging Face Inference API
     // Приоритет: проверенные Stable Diffusion модели
-    // Модель DeepSeek Janus-Pro-7B может требовать специальной настройки или недоступна через стандартный API
     const models = [
       'runwayml/stable-diffusion-v1-5', // Надежная модель Stable Diffusion
       'stabilityai/stable-diffusion-2-1', // Альтернативная модель Stable Diffusion
       'CompVis/stable-diffusion-v1-4', // Резервная модель Stable Diffusion
-      // 'deepseek-ai/Janus-Pro-7B' // Временно отключена - может требовать специального формата запроса
     ]
 
     let lastError: any = null
@@ -53,211 +55,84 @@ export async function POST(request: NextRequest) {
 
     // Пробуем каждую модель по очереди
     for (const model of models) {
-      let timeoutId: NodeJS.Timeout | null = null
       try {
-        // Добавляем параметр wait_for_model для ожидания загрузки модели
-        const apiUrl = `https://api-inference.huggingface.co/models/${model}?wait_for_model=true`
-        
         console.log(`Attempting to generate image with model: ${model}`)
         attemptedModels.push(model)
         
-        // Создаем AbortController для таймаута
-        const controller = new AbortController()
-        timeoutId = setTimeout(() => controller.abort(), 120000) // 120 секунд (увеличено для wait_for_model)
-        
-        // Для Stable Diffusion используем упрощенный формат запроса
-        const requestBody: any = {
-          inputs: prompt
-        }
-        
-        console.log(`Sending request to ${model} with prompt length: ${prompt.length}`)
-        
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
+        // Используем новый InferenceClient для генерации изображений
+        // textToImage автоматически обрабатывает загрузку модели и возвращает Blob
+        const imageBlobResult = await hf.textToImage(
+          {
+            model: model,
+            inputs: prompt,
           },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        })
+          {
+            outputType: 'blob', // Явно указываем, что хотим получить Blob
+            wait_for_model: true, // Ждем загрузки модели
+          }
+        )
         
-        console.log(`Response status for ${model}: ${response.status} ${response.statusText}`)
-        
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
-        }
-
-        if (response.ok) {
-          const contentType = response.headers.get('content-type')
-          console.log(`Model ${model} response content-type: ${contentType}`)
-          
-          // Проверяем, что ответ действительно является изображением
-          if (contentType && contentType.startsWith('image/')) {
-            try {
-              imageBlob = await response.blob()
-              if (imageBlob && imageBlob.size > 0) {
-                usedModel = model
-                console.log(`Successfully generated image using model: ${model}, size: ${imageBlob.size} bytes`)
-                break // Успешно получили изображение
-              } else {
-                console.error(`Model ${model} returned empty image blob`)
-                lastError = {
-                  status: response.status,
-                  statusText: 'Empty response',
-                  error: 'Received empty image blob',
-                  model
-                }
-                continue
-              }
-            } catch (blobError) {
-              console.error(`Model ${model} failed to read blob:`, blobError)
-              lastError = {
-                status: response.status,
-                statusText: 'Blob read error',
-                error: blobError instanceof Error ? blobError.message : String(blobError),
-                model
-              }
-              continue
-            }
-          } else {
-            // Если ответ не изображение, возможно это JSON с ошибкой
-            const textResponse = await response.text()
-            console.log(`Model ${model} returned non-image response (${contentType}):`, textResponse.substring(0, 300))
-            try {
-              const jsonResponse = JSON.parse(textResponse)
-              if (jsonResponse.error) {
-                console.error(`Model ${model} returned error in response:`, jsonResponse.error)
-                lastError = {
-                  status: response.status,
-                  statusText: response.statusText,
-                  error: jsonResponse.error,
-                  model
-                }
-                continue
-              } else {
-                // Неожиданный JSON ответ
-                console.error(`Model ${model} returned unexpected JSON:`, JSON.stringify(jsonResponse).substring(0, 300))
-                lastError = {
-                  status: response.status,
-                  statusText: response.statusText,
-                  error: `Unexpected JSON response: ${JSON.stringify(jsonResponse).substring(0, 200)}`,
-                  model
-                }
-                continue
-              }
-            } catch {
-              // Не JSON, просто текст ошибки
-              console.error(`Model ${model} returned non-image, non-JSON response:`, textResponse.substring(0, 200))
-              lastError = {
-                status: response.status,
-                statusText: response.statusText,
-                error: `Unexpected content type: ${contentType}, response: ${textResponse.substring(0, 200)}`,
-                model
-              }
-              continue
-            }
-          }
-        } else if (response.status === 503) {
-          // Модель загружается, даже с wait_for_model=true может быть 503
-          // Пробуем подождать и повторить запрос один раз
-          const errorText = await response.text().catch(() => 'Unable to read error')
-          console.log(`Model ${model} is loading (503), waiting 5 seconds and retrying... Error: ${errorText.substring(0, 200)}`)
-          
-          // Очищаем текущий таймаут
-          if (timeoutId) {
-            clearTimeout(timeoutId)
-            timeoutId = null
-          }
-          
-          // Ждем 5 секунд и пробуем еще раз с новым контроллером
-          await new Promise(resolve => setTimeout(resolve, 5000))
-          
-          try {
-            // Создаем новый контроллер для повторной попытки
-            const retryController = new AbortController()
-            const retryTimeoutId = setTimeout(() => retryController.abort(), 120000)
-            
-            const retryResponse = await fetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(requestBody),
-              signal: retryController.signal
-            })
-            
-            if (retryTimeoutId) {
-              clearTimeout(retryTimeoutId)
-            }
-            
-            if (retryResponse.ok) {
-              const contentType = retryResponse.headers.get('content-type')
-              if (contentType && contentType.startsWith('image/')) {
-                imageBlob = await retryResponse.blob()
-                if (imageBlob && imageBlob.size > 0) {
-                  usedModel = model
-                  console.log(`Successfully generated image using model: ${model} after retry, size: ${imageBlob.size} bytes`)
-                  break
-                }
-              }
-            }
-          } catch (retryError) {
-            console.log(`Retry failed for ${model}, trying next model...`)
-          }
-          
-          lastError = {
-            status: 503,
-            statusText: 'Service Unavailable',
-            error: errorText || 'Model is loading, retry failed',
-            model
-          }
-          continue
-        } else if (response.status === 410) {
-          // Модель больше недоступна, пробуем следующую
-          console.log(`Model ${model} is gone, trying next...`)
-          continue
+        // textToImage возвращает Blob напрямую
+        if (imageBlobResult && imageBlobResult instanceof Blob && imageBlobResult.size > 0) {
+          imageBlob = imageBlobResult
+          usedModel = model
+          console.log(`Successfully generated image using model: ${model}, size: ${imageBlob.size} bytes`)
+          break // Успешно получили изображение
         } else {
-          // Другая ошибка, сохраняем для последнего сообщения
-          let errorText = ''
-          try {
-            errorText = await response.text()
-          } catch (e) {
-            errorText = `Failed to read error response: ${e}`
-          }
-          console.error(`Model ${model} failed with status ${response.status}:`, errorText.substring(0, 500))
+          console.error(`Model ${model} returned invalid image blob`)
           lastError = {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorText,
+            status: 500,
+            statusText: 'Invalid response',
+            error: 'Received invalid image blob',
             model
           }
           continue
         }
       } catch (error: any) {
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-        }
         console.error(`Error with model ${model}:`, error)
-        // Обрабатываем ошибки таймаута и сети
-        if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-          lastError = {
-            status: 408,
-            statusText: 'Request Timeout',
-            error: 'Превышено время ожидания ответа от модели',
-            model
-          }
-        } else if (error.message) {
-          lastError = {
-            status: 0,
-            statusText: 'Network Error',
-            error: error.message,
-            model
-          }
-        } else {
-          lastError = error
+        
+        // Обрабатываем различные типы ошибок
+        let errorStatus = 500
+        let errorStatusText = 'Internal Server Error'
+        let errorMessage = 'Неизвестная ошибка'
+        
+        if (error.message) {
+          errorMessage = error.message
+        }
+        
+        // Проверяем специфичные ошибки Hugging Face API
+        if (error.message?.includes('503') || error.message?.includes('loading')) {
+          errorStatus = 503
+          errorStatusText = 'Service Unavailable'
+          errorMessage = 'Модель загружается. Попробуйте подождать и повторить запрос.'
+        } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+          errorStatus = 401
+          errorStatusText = 'Unauthorized'
+          errorMessage = 'Ошибка аутентификации API. Проверьте API ключ.'
+        } else if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+          errorStatus = 403
+          errorStatusText = 'Forbidden'
+          errorMessage = 'Доступ запрещен. Проверьте права доступа API ключа.'
+        } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+          errorStatus = 429
+          errorStatusText = 'Too Many Requests'
+          errorMessage = 'Превышен лимит запросов. Подождите немного.'
+        } else if (error.message?.includes('404') || error.message?.includes('Not Found')) {
+          errorStatus = 404
+          errorStatusText = 'Not Found'
+          errorMessage = `Модель ${model} не найдена.`
+        } else if (error.message?.includes('timeout') || error.name === 'AbortError') {
+          errorStatus = 408
+          errorStatusText = 'Request Timeout'
+          errorMessage = 'Превышено время ожидания ответа от модели'
+        }
+        
+        lastError = {
+          status: errorStatus,
+          statusText: errorStatusText,
+          error: errorMessage,
+          model,
+          originalError: error.message || String(error)
         }
         continue
       }
