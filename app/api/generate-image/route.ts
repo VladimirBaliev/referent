@@ -37,15 +37,14 @@ export async function POST(request: NextRequest) {
     
     console.log('API key found, length:', apiKey.length)
 
-    // Создаем InferenceClient с новым API
+    // Создаем InferenceClient
     const hf = new HfInference(apiKey)
 
-    // Используем модели для генерации изображений через Hugging Face Inference API
-    // Приоритет: проверенные Stable Diffusion модели
-    const models = [
-      'runwayml/stable-diffusion-v1-5', // Надежная модель Stable Diffusion
-      'stabilityai/stable-diffusion-2-1', // Альтернативная модель Stable Diffusion
-      'CompVis/stable-diffusion-v1-4', // Резервная модель Stable Diffusion
+    // Используем модели, доступные через Inference Providers
+    // Старые Stable Diffusion модели могут не поддерживаться, пробуем разные варианты
+    const modelConfigs = [
+      { model: 'stabilityai/stable-diffusion-2-1', provider: 'hf-inference' as const },
+      { model: 'stabilityai/stable-diffusion-2-1', provider: undefined }, // Попробуем без провайдера
     ]
 
     let lastError: any = null
@@ -54,22 +53,25 @@ export async function POST(request: NextRequest) {
     const attemptedModels: string[] = []
 
     // Пробуем каждую модель по очереди
-    for (const model of models) {
+    for (const { model, provider } of modelConfigs) {
       try {
-        console.log(`Attempting to generate image with model: ${model}`)
-        attemptedModels.push(model)
+        const providerLabel = provider || 'auto'
+        console.log(`Attempting to generate image with model: ${model}, provider: ${providerLabel}`)
+        attemptedModels.push(`${model} (${providerLabel})`)
         
-        // Используем новый InferenceClient для генерации изображений
-        // Указываем провайдер "hf-inference" для прямого доступа к Hugging Face Inference API
-        // Это необходимо, так как не все модели доступны через другие провайдеры
+        // Используем InferenceClient с указанием провайдера (или без него)
+        const requestConfig: any = {
+          model: model,
+          inputs: prompt,
+        }
+        if (provider) {
+          requestConfig.provider = provider
+        }
+        
         const imageBlobResult = await hf.textToImage(
+          requestConfig,
           {
-            model: model,
-            inputs: prompt,
-            provider: 'hf-inference', // Используем прямой доступ к HF Inference API
-          },
-          {
-            outputType: 'blob' as const, // Явно указываем тип возвращаемого значения
+            outputType: 'blob' as const,
           }
         )
         
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
         if (error.message?.includes('No Inference Provider available') || error.message?.includes('No provider')) {
           errorStatus = 503
           errorStatusText = 'Service Unavailable'
-          errorMessage = `Модель ${model} недоступна через Inference Providers. Попробуйте другую модель или используйте прямой доступ к API.`
+          errorMessage = `Модель ${model} недоступна через Inference Providers.`
         } else if (error.message?.includes('503') || error.message?.includes('loading')) {
           errorStatus = 503
           errorStatusText = 'Service Unavailable'
@@ -185,7 +187,7 @@ export async function POST(request: NextRequest) {
       // Всегда возвращаем детали ошибки для диагностики
       const errorDetails: any = {
         attemptedModels: attemptedModels,
-        modelsCount: models.length,
+        modelsCount: modelConfigs.length,
         attemptedCount: attemptedModels.length
       }
       
